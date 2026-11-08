@@ -174,54 +174,87 @@ def other_terms(soup, month):
 # ---------------------------------------------------------------- 個別ページ
 
 def parse_stock(html):
-    """個別優待ページから優待内容などを読む。見つからない項目は空のまま。"""
+    """個別優待ページから優待内容などを読む。見つからない項目は空のまま。
+
+    ページは <tr> の中に <th>ラベル</th><td>値</td> が1組以上並ぶ形。
+    """
     soup = BeautifulSoup(html, "html.parser")
-    out = {"t": "", "tiers": [], "times": None, "long": "", "note": "", "v": None, "cap": None, "name": ""}
+    out = {"t": "", "desc": "", "tiers": [], "times": None, "long": "", "note": "", "v": None, "cap": None, "name": ""}
 
-    h = soup.find(["h1", "h2"])
-    if h:
-        out["name"] = clean(h.get_text(" "))
+    title = clean(soup.title.get_text(" ")) if soup.title else ""
+    m = re.match(r"^(.+?)\([0-9][0-9A-Z]{3}\)の株主優待", title)
+    if m:
+        out["name"] = m.group(1).strip()
 
-    # ラベル→値 の組を集める(th/td、dt/dd)
     pairs = []
     for tr in soup.find_all("tr"):
         cells = tr.find_all(["th", "td"])
-        if len(cells) >= 2:
-            pairs.append((clean(cells[0].get_text(" ")), [clean(c.get_text(" ")) for c in cells[1:]]))
-    for dl in soup.find_all("dl"):
-        for dt_, dd in zip(dl.find_all("dt"), dl.find_all("dd")):
-            pairs.append((clean(dt_.get_text(" ")), [clean(dd.get_text(" "))]))
+        for a, b in zip(cells, cells[1:]):
+            if a.name == "th" and b.name == "td":
+                pairs.append((clean(a.get_text(" ")), clean(b.get_text(" "))))
 
-    tiers = []
-    for label, vals in pairs:
-        v = " ".join(x for x in vals if x)
-        if re.fullmatch(r"[\d,]+株(以上)?[^\s]*", label) and v:
-            tiers.append([label, v])
-            continue
-        if not out["t"] and ("優待内容" in label or label in ("優待", "優待品", "タイプ")):
+    tiers, arrive, comment = [], "", ""
+    for label, v in pairs:
+        if re.fullmatch(r"[\d,]+株(以上|未満)?.*", label) and len(label) <= 20:
+            if v and [label, v] not in tiers:
+                tiers.append([label, v])
+        elif label == "優待内容":
+            mm = re.search(r"優待回数：\s*年\s*(\d+)\s*回", v)
+            if mm:
+                out["times"] = int(mm.group(1))
+                # 回数の後〜最初の「N株以上」までを補足説明として残す
+                rest = v[mm.end():]
+                cut = re.search(r"[\d,]+株(以上|未満)", rest)
+                desc = (rest[: cut.start()] if cut else rest).strip()
+                out["desc"] = desc[:200]
+        elif label == "タイプ":
             out["t"] = v
-        elif out["times"] is None and "回数" in label:
-            out["times"] = to_int(v)
-        elif not out["note"] and ("到着" in label or "時期" in label):
-            out["note"] = "到着: " + v
-        elif out["cap"] is None and ("必要資金" in label or "最低投資" in label):
+        elif label.startswith("到着時期"):
+            arrive = v
+        elif label == "長期優遇":
+            mm = re.search(r"長期条件等：\s*(.+?)(?:\s*長期認定|$)", v)
+            if mm and mm.group(1).strip() not in ("", "-", "なし"):
+                out["long"] = mm.group(1).strip()
+        elif label == "コメント":
+            comment = v
+        elif label == "必要資金":
             out["cap"] = to_int(v)
-        elif out["v"] is None and ("優待価値" in label or "優待金額" in label or "換算" in label):
+        elif label.startswith("優待価値"):
             out["v"] = to_int(v)
-        elif not out["long"] and ("長期" in label or "継続保有" in label):
-            out["long"] = v
     out["tiers"] = tiers
-
-    text = clean(soup.get_text(" "))
+    notes = []
+    if arrive:
+        notes.append("到着: " + arrive)
+    if comment:
+        notes.append(comment)
+    out["note"] = " / ".join(notes)
     if not out["long"]:
-        m = re.search(r"(\d+\s*(?:年|ヶ月|か月|カ月)以上[^。 ]{0,20}(?:継続)?保有)", text)
-        if m:
-            out["long"] = m.group(1)
-    if out["times"] is None:
-        m = re.search(r"年\s*(\d)\s*回", text)
-        if m:
-            out["times"] = int(m.group(1))
+        joined = " ".join(t[1] for t in tiers)
+        mm = re.search(r"(継続保有(?:期間)?\s*\d+\s*(?:年|ヶ月|か月|カ月)以上|\d+\s*(?:年|ヶ月|か月|カ月)以上(?:継続)?保有)", joined)
+        if mm:
+            out["long"] = mm.group(1)
     return out
+
+
+def parse_broker_updated(soup):
+    """売建リスト上部の「最終更新」行を {証券会社: 日時} で返す。"""
+    for table in soup.find_all("table"):
+        rows = table.find_all("tr")
+        if not rows:
+            continue
+        head = [clean(c.get_text(" ")) for c in rows[0].find_all(["th", "td"])]
+        if not head or head[0] != "証券会社":
+            continue
+        for tr in rows[1:]:
+            cells = [clean(c.get_text(" ")) for c in tr.find_all(["th", "td"])]
+            if cells and cells[0] == "最終更新":
+                res = {}
+                for h, v in zip(head[1:], cells[1:]):
+                    b = broker_of(h)
+                    if b:
+                        res[b] = v
+                return res
+    return {}
 
 
 # ---------------------------------------------------------------- 本体
@@ -248,7 +281,7 @@ def main():
 
     # 1) 売建リスト(月末+別権利日)
     terms = [f"{month}end"] + [t.strip() for t in args.terms.split(",") if t.strip()]
-    done, items, log = set(), [], []
+    done, items, log, updated = set(), [], [], {}
     while terms:
         term = terms.pop(0)
         if term in done:
@@ -265,6 +298,8 @@ def main():
         if args.samples:
             (sample_dir / f"list-{term}.html").write_text(html, encoding="utf-8")
         got, soup = parse_list(html, month, day)
+        if not updated:
+            updated = parse_broker_updated(soup)
         log.append(f"一覧 {term}: {len(got)}件")
         have = {it["c"] for it in items}
         items += [it for it in got if it["c"] not in have]
@@ -285,7 +320,7 @@ def main():
             info = parse_stock(html)
             page_name = info.pop("name")
             # 一覧の名前が省略(…)されていれば個別ページの名前を使う
-            if page_name and (not it["n"] or it["n"].endswith(("…", "..."))) and len(page_name) <= 40:
+            if page_name and (not it["n"] or it["n"].endswith(("…", "..."))) and len(page_name) <= 60:
                 it["n"] = page_name
             for k, v in info.items():
                 it[k] = v
@@ -297,6 +332,7 @@ def main():
 
     for it in items:
         it.setdefault("t", "")
+        it.setdefault("desc", "")
         it.setdefault("tiers", [])
         it.setdefault("times", None)
         it.setdefault("long", "")
@@ -305,7 +341,8 @@ def main():
         it.setdefault("cap", None)
 
     year = target_year(month, today)
-    data = {"asof": today.isoformat(), "month": month, "brokers": BROKERS, "items": items}
+    data = {"asof": today.isoformat(), "month": month, "brokers": BROKERS,
+            "brokerUpdated": [updated.get(b, "") for b in BROKERS], "items": items}
     data_dir = ROOT / "data"
     data_dir.mkdir(exist_ok=True)
     fname = f"{year}-{month:02d}.json"

@@ -20,7 +20,7 @@ on:
       samples:
         description: "調整用に保存する元HTMLの件数(0で保存しない)"
         required: false
-        default: "3"
+        default: "0"
 
 permissions:
   contents: write
