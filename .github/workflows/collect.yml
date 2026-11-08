@@ -1,0 +1,61 @@
+name: 優待データ収集
+
+on:
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "権利月"
+        type: choice
+        required: true
+        default: "4"
+        options: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
+      terms:
+        description: "追加の権利日(例: 420)。空欄で可。カンマ区切り"
+        required: false
+        default: ""
+      limit:
+        description: "個別ページの取得上限(0=全件、試験用)"
+        required: false
+        default: "0"
+      samples:
+        description: "調整用に保存する元HTMLの件数(0で保存しない)"
+        required: false
+        default: "3"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests beautifulsoup4
+      - name: 収集
+        run: >
+          python scripts/collect.py
+          --month "${{ inputs.month }}"
+          --terms "${{ inputs.terms }}"
+          --limit "${{ inputs.limit }}"
+          --samples "${{ inputs.samples }}"
+      - name: コミット
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data samples 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "変更なし"
+          else
+            git commit -m "データ収集: ${{ inputs.month }}月"
+            git pull --rebase
+            git push
+          fi
