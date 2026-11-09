@@ -287,7 +287,7 @@ def build_index(data_dir):
             continue
         its = d.get("items", [])
         months.append({"file": fp.name, "month": d.get("month"), "asof": d.get("asof", ""),
-                       "count": len(its), "withYutai": sum(1 for x in its if x.get("t") or x.get("tiers"))})
+                       "at": d.get("at", ""), "count": len(its), "withYutai": sum(1 for x in its if x.get("t") or x.get("tiers"))})
     (data_dir / "index.json").write_text(json.dumps({"months": months}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
@@ -307,7 +307,8 @@ def main():
         (ROOT / "data").mkdir(exist_ok=True)
         build_index(ROOT / "data")
         return
-    today = dt.datetime.now(JST).date()
+    now = dt.datetime.now(JST)
+    today = now.date()
     month = args.month or today.month
     if not 1 <= month <= 12:
         sys.exit("month は1〜12")
@@ -377,7 +378,7 @@ def main():
         it.setdefault("cap", None)
 
     year = target_year(month, today)
-    data = {"asof": today.isoformat(), "month": month, "brokers": BROKERS,
+    data = {"asof": today.isoformat(), "at": now.strftime("%Y-%m-%d %H:%M"), "month": month, "brokers": BROKERS,
             "brokerUpdated": [updated.get(b, "") for b in BROKERS], "items": items}
     data_dir = ROOT / "data"
     data_dir.mkdir(exist_ok=True)

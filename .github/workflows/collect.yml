@@ -1,9 +1,9 @@
 name: 優待データ収集
+# 表示ページから起動したときは req(依頼番号)を名前に入れ、ページ側が自分の実行を見分ける
+run-name: "優待データ収集 ${{ inputs.month }}月 ${{ inputs.req }}"
 
 on:
-  # 毎月1日 9:07(日本時間)に当月分を自動取得。cronはUTC指定
-  schedule:
-    - cron: "7 0 1 * *"
+  # 手動実行のみ(表示ページの月チップ・取り直し、または Actions 画面の Run workflow)
   workflow_dispatch:
     inputs:
       month:
@@ -24,6 +24,10 @@ on:
         description: "調整用に保存する元HTMLの件数(0で保存しない)"
         required: false
         default: "0"
+      req:
+        description: "表示ページからの依頼番号(手動実行では空欄)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -45,7 +49,7 @@ jobs:
       - name: 収集
         run: >
           python scripts/collect.py
-          --month "${{ inputs.month || '0' }}"
+          --month "${{ inputs.month }}"
           --terms "${{ inputs.terms || '' }}"
           --limit "${{ inputs.limit || '0' }}"
           --samples "${{ inputs.samples || '0' }}"
@@ -59,7 +63,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "変更なし"
           else
-            git commit -m "データ収集: ${{ inputs.month || '当' }}月"
+            git commit -m "データ収集: ${{ inputs.month }}月"
             git pull --rebase
             git push
           fi

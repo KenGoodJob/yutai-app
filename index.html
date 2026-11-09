@@ -45,6 +45,18 @@ input[type=search]{flex:1;min-width:0;font:inherit;padding:9px 12px;border:1px s
 mark{background:var(--hl);color:var(--hl-fg);border-radius:2px;padding:0 1px}
 .side{display:grid;justify-items:end;gap:2px}
 .ver{font-family:var(--f-num);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1}
+.chip.todo{border-style:dashed;color:var(--muted)}
+.btn:disabled{opacity:.4;cursor:default}
+.job{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;background:var(--accent-soft);color:var(--fg);border-radius:8px;padding:7px 10px;font-size:13px}
+.job.err{background:var(--ban-soft);color:var(--ban)}
+.job a{color:inherit}
+.job .x{margin-left:auto}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--accent);border-right-color:transparent;border-radius:50%;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tok{display:grid;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px}
+.tok ol{margin:0;padding-left:1.4em;line-height:1.7}
+.tok .search input{flex:1;min-width:0;font:inherit;font-family:var(--f-num);font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg)}
+.tok a{color:var(--accent)}
 .upd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:7px 10px;font-size:13px}
 .upd .ver{color:inherit}
 .upd .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
@@ -134,11 +146,24 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
     <h1>優待サーチ <small id="asof">読み込み中…</small></h1>
     <button class="chip favchip" id="onlyFav" aria-pressed="false">★ お気に入り</button>
     <div class="side">
-      <a class="btn" id="runLink" href="https://github.com/KenGoodJob/yutai-app/actions/workflows/collect.yml" target="_blank" rel="noopener">収集を実行</a>
+      <button class="btn" id="refetch" type="button" disabled>取り直す</button>
       <span class="ver" id="ver"></span>
     </div>
   </div>
   <div class="upd" id="upd" role="status" hidden></div>
+  <div class="job" id="job" role="status" hidden></div>
+  <div class="tok" id="tok" hidden>
+    <b>取得用のトークン（最初に1回だけ）</b>
+    <ol>
+      <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHubのトークン作成画面</a>を開く</li>
+      <li>名前は「優待サーチ」など。有効期限は長め（例：1年）</li>
+      <li>Repository access は「Only select repositories」で <b>yutai-app</b> だけ</li>
+      <li>Permissions の <b>Actions</b> を「Read and write」にして作成</li>
+      <li>表示されたトークン（github_pat_…）をコピーして下に貼り付け、保存</li>
+    </ol>
+    <div class="search"><input id="tokIn" type="password" placeholder="github_pat_…" autocomplete="off"><button class="btn" id="tokSave" type="button">保存</button></div>
+    <div class="row"><span class="note" id="tokMsg" style="flex:1">トークンはこの端末のブラウザにだけ保存します（リポジトリには入りません）。</span><button class="btn" id="tokDel" type="button">削除</button><button class="btn" id="tokClose" type="button">閉じる</button></div>
+  </div>
   <div class="search"><input id="q" type="search" placeholder="キーワード（例：QUOカード、寿司、4000）" autocomplete="off"><button class="btn" id="qClear" type="button" disabled>クリア</button></div>
   <div class="row" id="quick"><span class="lbl">よく使う</span></div>
   <div class="row" id="hlRow"><span class="lbl">ハイライト</span></div>
@@ -154,11 +179,12 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
   <div id="list" style="display:grid;gap:12px"></div>
   <p class="note" id="bkUpd"></p>
   <p class="note">データは96ut.comの一般信用売建リストと銘柄別優待ページから取得しています（みんかぶはリンクのみ）。一般信用の在庫・規制は日々変わるので、発注前に証券会社の画面で確認してください。お気に入りは一時的なもので、ブラウザのタブを閉じると消えます。</p>
+  <p class="note">未取得の月（点線）を押すと取得、「取り直す」で表示中の月を最新にします（GitHub Actionsで実行）。<a href="#" id="tokOpen">取得用トークンの設定</a>　<a href="https://github.com/KenGoodJob/yutai-app/actions/workflows/collect.yml" target="_blank" rel="noopener">GitHubの実行画面</a></p>
 </div></main>
 
 <script>
 /* 版番号：公開時刻（日本時間）の14桁。公開のたびに version.json と同じ値へ更新する */
-const APP_VERSION='20261110011114';
+const APP_VERSION='20261110012914';
 const APP_URL='https://kengoodjob.github.io/yutai-app/';
 /* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
 const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
@@ -234,10 +260,9 @@ function renderMonths(){
   const box=$("#months"); box.querySelectorAll(".chip").forEach(c=>c.remove());
   for(let m=1;m<=12;m++){
     const b=document.createElement("button");b.className="chip";b.textContent=m+"月";
-    b.disabled=!meta[m];
-    if(b.disabled)b.title="この月はまだ収集していません";
+    if(!meta[m]){b.classList.add("todo");b.title="未取得：押すと取得します";}
     b.setAttribute("aria-pressed",String(m===state.month));
-    b.onclick=()=>selectMonth(m);
+    b.onclick=()=>meta[m]?selectMonth(m):requestCollect(m);
     box.append(b);
   }
 }
@@ -251,7 +276,7 @@ function renderBrokerChips(){
   });
 }
 async function selectMonth(m){
-  state.month=m; state.open.clear(); state.keep.clear(); renderMonths();
+  state.month=m; state.open.clear(); state.keep.clear(); renderMonths(); $("#refetch").disabled=false;
   if(!cache[m]){
     $("#list").innerHTML=`<div class="empty">${m}月のデータを読み込んでいます…</div>`;
     try{ await loadMonth(m); }
@@ -312,12 +337,12 @@ function render(){
   const d=state.month&&cache[state.month];
   if(!d){
     $("#count").textContent=""; $("#bkUpd").textContent="";
-    if(!state.month) $("#list").innerHTML=`<div class="empty">まだ優待データがありません。<br>右上の「収集を実行」から月を選んで実行してください。</div>`;
+    if(!state.month) $("#list").innerHTML=`<div class="empty">まだ優待データがありません。<br>権利月の点線のチップを押すと取得できます。</div>`;
     return;
   }
   const brokers=brokersFor();
   const rows=d.items.filter(match);
-  $("#count").textContent=`${state.month}月権利${state.onlyFav?"・★お気に入り":""}　${rows.length}件　（${d.asof||"—"}時点のデータ）`;
+  $("#count").textContent=`${state.month}月権利${state.onlyFav?"・★お気に入り":""}　${rows.length}件　（${d.at||d.asof||"—"}時点のデータ）`;
   const bu=d.brokerUpdated;
   $("#bkUpd").textContent=bu&&bu.some(Boolean)?"一般信用の各社最終更新（96ut）："+brokers.map((n,i)=>bu[i]?`${n} ${bu[i]}`:"").filter(Boolean).join("、"):"";
   shown=new Map(rows.map(it=>[it.c,it]));
@@ -376,6 +401,97 @@ $("#onlyShort").onclick=e=>{state.onlyShort=!state.onlyShort;e.target.setAttribu
 function setQ(v){state.q=v.trim();$("#qClear").disabled=!$("#q").value;render();}
 $("#q").addEventListener("input",e=>setQ(e.target.value));
 $("#qClear").onclick=()=>{$("#q").value="";setQ("");};
+/* ---------- 収集の起動（GitHub Actions の workflow_dispatch をトークンで呼ぶ） ---------- */
+const GH_API="https://api.github.com/repos/KenGoodJob/yutai-app";
+const WF="collect.yml", TOK_KEY="yutai-gh-token", JOB_KEY="yutai-job";
+let tokMem="", job=null, jobTimer=null;
+function lsGet(k){try{return localStorage.getItem(k)||"";}catch(_){return "";}}
+function lsSet(k,v){try{v?localStorage.setItem(k,v):localStorage.removeItem(k);}catch(_){}}
+function token(){return lsGet(TOK_KEY)||tokMem;}
+async function gh(path,opt={}){
+  const r=await fetch(GH_API+path,{...opt,cache:"no-store",headers:{"Accept":"application/vnd.github+json","Authorization":"Bearer "+token(),"X-GitHub-Api-Version":"2022-11-28",...(opt.body?{"Content-Type":"application/json"}:{})}});
+  if(!r.ok){const e=new Error(String(r.status));e.status=r.status;throw e;}
+  return r.status===204?null:r.json();
+}
+function showTok(msg){$("#tok").hidden=false;if(msg)$("#tokMsg").textContent=msg;setHdr();}
+$("#tokOpen").onclick=e=>{e.preventDefault();showTok();window.scrollTo(0,0);};
+$("#tokClose").onclick=()=>{$("#tok").hidden=true;};
+$("#tokDel").onclick=()=>{lsSet(TOK_KEY,"");tokMem="";$("#tokIn").value="";$("#tokMsg").textContent="トークンを削除しました。";};
+$("#tokSave").onclick=async()=>{
+  const v=$("#tokIn").value.trim(); if(!v) return;
+  const old=tokMem; tokMem=v; $("#tokMsg").textContent="確認しています…";
+  try{ await gh(`/actions/workflows/${WF}`); }
+  catch(e){ tokMem=old; $("#tokMsg").textContent=`このトークンでは使えませんでした（${e.status||"通信エラー"}）。yutai-app と Actions の権限を確認してください。`; return; }
+  lsSet(TOK_KEY,v); $("#tokIn").value=""; $("#tokMsg").textContent="保存しました。";
+  setTimeout(()=>{$("#tok").hidden=true;},800);
+  if(pendingMonth){const m=pendingMonth;pendingMonth=null;requestCollect(m);}
+};
+let pendingMonth=null;
+$("#refetch").onclick=()=>{ if(state.month) requestCollect(state.month,true); };
+
+function jobBand(html,err){const el=$("#job");el.className="job"+(err?" err":"");el.innerHTML=html;el.hidden=!html;setHdr();}
+function elapsed(t){const s=Math.max(0,Math.round((Date.now()-t)/1000));return s<60?`${s}秒`:`${Math.floor(s/60)}分${s%60}秒`;}
+async function requestCollect(m,again){
+  if(job){alert(`${job.month}月分を収集中です。終わってから実行してください。`);return;}
+  if(!token()){pendingMonth=m;showTok("取得にはトークンが必要です。下の手順で作って保存すると、そのまま取得を始めます。");window.scrollTo(0,0);return;}
+  const n=meta[m]?.count;
+  if(!confirm(`${m}月分を${again?"取り直し":"取得"}しますか？\n${n?`前回${n}銘柄。`:""}銘柄数により数分〜30分ほどかかります。`)) return;
+  const req=Date.now().toString(36);
+  try{
+    await gh(`/actions/workflows/${WF}/dispatches`,{method:"POST",body:JSON.stringify({ref:"main",inputs:{month:String(m),req}})});
+  }catch(e){
+    jobBand(`<span>${m}月分の取得を始められませんでした（${e.status||"通信エラー"}）。</span>${e.status===401||e.status===403||e.status===404?`<a href="#" onclick="showTok();return false">トークンを確認</a>`:""}<button class="btn x" onclick="jobBand('')">閉じる</button>`,true);
+    return;
+  }
+  job={month:m,req,t:Date.now(),prevAt:meta[m]?.at||"",run:null,url:""};
+  lsSet(JOB_KEY,JSON.stringify(job));
+  watchJob();
+}
+function resumeJob(){
+  try{ const j=JSON.parse(lsGet(JOB_KEY)||"null");
+    if(j&&Date.now()-j.t<90*60000&&token()){job=j;watchJob();} else lsSet(JOB_KEY,""); }catch(_){lsSet(JOB_KEY,"");}
+}
+setInterval(()=>document.querySelectorAll("#job .el").forEach(e=>e.textContent=elapsed(Number(e.dataset.t))),1000);
+function endJob(html,err){
+  clearTimeout(jobTimer); job=null; lsSet(JOB_KEY,"");
+  jobBand(html?html+`<button class="btn x" onclick="jobBand('')">閉じる</button>`:"",err);
+}
+async function watchJob(){
+  clearTimeout(jobTimer); if(!job) return;
+  const j=job, link=()=>j.url?`<a href="${esc(j.url)}" target="_blank" rel="noopener">GitHubで見る</a>`:"";
+  const band=s=>jobBand(`<span class="spin" aria-hidden="true"></span><span>${j.month}月分 ${s}　<span class="el" data-t="${j.t}">${elapsed(j.t)}</span></span>${link()}`);
+  try{
+    if(!j.run){
+      const r=await gh(`/actions/workflows/${WF}/runs?event=workflow_dispatch&per_page=10`);
+      const run=(r.workflow_runs||[]).find(x=>(x.display_title||"").includes(j.req));
+      if(run){j.run=run.id;j.url=run.html_url;lsSet(JOB_KEY,JSON.stringify(j));}
+      else if(Date.now()-j.t>3*60000){endJob(`<span>${j.month}月分の実行が見つかりませんでした。</span><a href="https://github.com/KenGoodJob/yutai-app/actions/workflows/${WF}" target="_blank" rel="noopener">GitHubで確認</a>`,true);return;}
+    }
+    if(j.run&&!j.done){
+      const run=await gh(`/actions/runs/${j.run}`);
+      if(run.status!=="completed"){band(run.status==="queued"?"順番待ち":"収集中");jobTimer=setTimeout(watchJob,10000);return;}
+      if(run.conclusion!=="success"){endJob(`<span>${j.month}月分の収集が失敗しました（${esc(run.conclusion||"")}）。</span>${link()}`,true);return;}
+      j.done=Date.now(); lsSet(JOB_KEY,JSON.stringify(j));
+    }
+    if(j.done){
+      /* コミット後、GitHub Pages に反映されるまで目次を見に行く */
+      band("ページへ反映待ち");
+      await loadIndex();
+      if(meta[j.month]&&meta[j.month].at&&meta[j.month].at!==j.prevAt){
+        delete cache[j.month];
+        endJob(`<span>${j.month}月分を取得しました（${meta[j.month].count}銘柄）。</span>`);
+        if(!state.month||state.month===j.month||confirm(`${j.month}月分を表示しますか？`)) selectMonth(j.month); else renderMonths();
+        return;
+      }
+      if(Date.now()-j.done>10*60000){endJob(`<span>収集は終わりましたが、ページへの反映を確認できませんでした。少し待って開き直してください。</span>${link()}`,true);return;}
+    }
+    if(!j.run) band("開始待ち");
+    jobTimer=setTimeout(watchJob,j.done?15000:5000);
+  }catch(e){
+    if(e.status===401){endJob(`<span>トークンが無効になっています（期限切れなど）。</span><a href="#" onclick="showTok();return false">設定し直す</a>`,true);return;}
+    band("確認中（通信を再試行）"); jobTimer=setTimeout(watchJob,15000);
+  }
+}
 /* ---------- 新しい版のお知らせ（ホーム画面起動の反映遅れ対策） ---------- */
 function showUpdate(latest){
   const el=$("#upd");
@@ -408,19 +524,25 @@ setHdr(); if(window.ResizeObserver) new ResizeObserver(setHdr).observe(hdr); els
 renderQuick(); renderHlChips(); renderMonths(); renderBrokerChips();
 $("#list").innerHTML=`<div class="empty">データを読み込んでいます…</div>`;
 
-(async()=>{
-  try{
-    const idx=await getJSON("data/index.json");
-    /* 同じ月が複数年あるときは新しいファイルを使う */
-    for(const e of (idx.months||[]).slice().sort((a,b)=>a.file.localeCompare(b.file))) if(e.month) meta[e.month]=e;
-  }catch(e){
-    $("#asof").textContent="読み込みに失敗しました";
-    $("#list").innerHTML=`<div class="empty">データの目次を読み込めませんでした。<br>まだ一度も収集していない場合は「収集を実行」から実行してください。</div>`;
-    return;
-  }
+async function loadIndex(){
+  const idx=await getJSON("data/index.json");
+  for(const k of Object.keys(meta)) delete meta[k];
+  /* 同じ月が複数年あるときは新しいファイルを使う */
+  for(const e of (idx.months||[]).slice().sort((a,b)=>a.file.localeCompare(b.file))) if(e.month) meta[e.month]=e;
   const ms=Object.keys(meta).map(Number).sort((a,b)=>a-b);
   $("#asof").textContent=ms.length?"収集済み："+ms.map(m=>m+"月").join("、"):"データなし";
   renderMonths();
+  return ms;
+}
+(async()=>{
+  let ms;
+  try{ ms=await loadIndex(); }
+  catch(e){
+    $("#asof").textContent="読み込みに失敗しました";
+    $("#list").innerHTML=`<div class="empty">データの目次を読み込めませんでした。<br>時間をおいて開き直してください。</div>`;
+    return;
+  }
+  resumeJob();
   if(!ms.length){ state.month=null; render(); return; }
   const now=new Date().getMonth()+1;
   selectMonth(ms.find(m=>m>=now)??ms[0]);
