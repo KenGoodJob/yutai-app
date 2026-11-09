@@ -142,7 +142,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
     <button class="chip" id="onlyShort" aria-pressed="false">売建可のみ</button>
     <span id="brokerChips" class="row"></span>
   </div>
-  <div class="listbar"><div class="count" id="count"></div><div class="seg" role="group" aria-label="詳細の開閉"><button id="openAll">すべて開く</button><button id="closeAll">すべて閉じる</button></div></div>
+  <div class="listbar"><div class="count" id="count"></div><div class="seg" role="group" aria-label="表示中のお気に入り"><button id="favAll">★ すべて登録</button><button id="favNone">すべて解除</button></div><div class="seg" role="group" aria-label="詳細の開閉"><button id="openAll">すべて開く</button><button id="closeAll">すべて閉じる</button></div></div>
 </div></header>
 
 <main><div class="wrap">
@@ -153,7 +153,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
 
 <script>
 /* 版番号：公開時刻（日本時間）の14桁。公開のたびに version.json と同じ値へ更新する */
-const APP_VERSION='20261109235427';
+const APP_VERSION='20261110003153';
 const APP_URL='https://kengoodjob.github.io/yutai-app/';
 /* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
 const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
@@ -294,13 +294,26 @@ function syncOpenBtns(rows){
   const nOpen=rows.filter(it=>state.open.has(it.c)).length;
   $("#openAll").disabled=!rows.length||nOpen===rows.length;
   $("#closeAll").disabled=nOpen===0;
+  syncFavBtns(rows);
+}
+/* お気に入りの一括ボタン：表示中の銘柄が対象 */
+function syncFavBtns(rows){
+  rows=rows||[...shown.values()];
+  const f=favs(), nFav=rows.filter(it=>f.has(it.c)).length;
+  $("#favAll").disabled=!rows.length||nFav===rows.length;
+  $("#favNone").disabled=nFav===0;
+}
+function setFavsShown(on){
+  const f=favs();
+  shown.forEach((_,c)=>on?f.add(c):f.delete(c));
+  saveFavs(f); render();
 }
 function toggleFav(btn){
   const code=btn.dataset.fav, f=favs();
   f.has(code)?f.delete(code):f.add(code);
   saveFavs(f);
   const on=f.has(code); btn.setAttribute("aria-pressed",String(on)); btn.textContent=on?"★":"☆";
-  if(state.onlyFav&&!on) render();
+  if(state.onlyFav&&!on) render(); else syncFavBtns();
 }
 function toggleRow(b){
   const code=b.dataset.code, it=shown.get(code), d=b.nextElementSibling; if(!it||!d) return;
@@ -318,6 +331,8 @@ $("#list").addEventListener("keydown",e=>{
   if(e.target.matches?.("div.tr[role=button]")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();toggleRow(e.target);}
 });
 $("#onlyFav").onclick=e=>{state.onlyFav=!state.onlyFav;e.currentTarget.setAttribute("aria-pressed",String(state.onlyFav));render()};
+$("#favAll").onclick=()=>setFavsShown(true);
+$("#favNone").onclick=()=>setFavsShown(false);
 $("#openAll").onclick=()=>{shown.forEach((_,c)=>state.open.add(c));render();};
 $("#closeAll").onclick=()=>{state.open.clear();render();};
 $("#onlyShort").onclick=e=>{state.onlyShort=!state.onlyShort;e.target.setAttribute("aria-pressed",String(state.onlyShort));render()};
