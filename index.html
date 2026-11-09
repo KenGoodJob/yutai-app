@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>優待サーチ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: sticky filter bar over a compact list (max 960px); each row expands into the stock card */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --fg:#1d2624; --muted:#64716d; --line:#d9e0dd;
+  --accent:#0f6b5c; --accent-soft:#e1efeb; --ok:#1f7a3f; --ok-soft:#e3f2e8;
+  --ng:#9aa3a0; --ban:#b3261e; --ban-soft:#fbe7e5; --warn:#8a5a00; --warn-soft:#fbf1dc;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141a19; --surface:#1c2422; --fg:#e4ebe8; --muted:#94a29d; --line:#2e3a37;
+  --accent:#5cc3ad; --accent-soft:#1e3a34; --ok:#6fd08f; --ok-soft:#1f3527;
+  --ng:#5d6a66; --ban:#ff8a80; --ban-soft:#3a2321; --warn:#e0b25a; --warn-soft:#3a2f1a; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6;padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:960px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.bar{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+header.bar .wrap{padding-block:12px 10px;display:grid;gap:10px}
+.top{display:flex;align-items:center;gap:10px}
+h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.02em;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;flex:1;min-width:0}
+h1 small{font-size:12px;color:var(--muted);font-weight:500}
+.btn{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:5px 12px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.search{display:flex;gap:8px}
+input[type=search]{flex:1;min-width:0;font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.lbl{font-size:11px;color:var(--muted);letter-spacing:.08em;margin-right:2px}
+.chip{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:3px 11px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.chip:disabled{opacity:.4;cursor:default}
+.quick{font-size:12px;padding:2px 9px}
+main .wrap{padding-block:14px 40px;display:grid;gap:12px}
+.count{font-size:13px;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:10px;min-width:0}
+.head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.code{font-family:var(--f-num);font-size:13px;color:var(--muted)}
+.name{font-size:17px;font-weight:700;text-wrap:balance}
+.tag{font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 6px;color:var(--muted)}
+.months{margin-left:auto;font-size:13px;color:var(--accent);font-weight:500}
+.benefit{font-size:14px;background:var(--accent-soft);border-radius:6px;padding:8px 10px;overflow-wrap:anywhere}
+.benefit.none{background:none;border:1px dashed var(--line);color:var(--muted)}
+.benefit table{border-collapse:collapse;margin-top:4px;font-variant-numeric:tabular-nums}
+.benefit td{padding:1px 14px 1px 0;vertical-align:top}
+.benefit td:first-child{white-space:nowrap}
+.benefit .sub{font-size:12px;color:var(--muted);margin-top:4px}
+.meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.meta b{font-family:var(--f-num);font-weight:500;color:var(--fg)}
+.brokers{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+@media (max-width:520px){.brokers{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.bk{border-radius:6px;padding:4px 6px;font-size:11px;line-height:1.35;background:var(--bg);color:var(--ng);min-width:0}
+.bk .bn{display:block;font-weight:700}
+.bk.ok{background:var(--ok-soft);color:var(--ok)}
+.bk.ban{background:var(--ban-soft);color:var(--ban)}
+.bk .st{font-family:var(--f-num);font-size:10.5px;overflow-wrap:anywhere}
+.links{display:flex;gap:14px;font-size:13px;flex-wrap:wrap}
+.links a{color:var(--accent)}
+.empty{text-align:center;color:var(--muted);padding:40px 0;line-height:1.9}
+.note{font-size:12px;color:var(--muted);line-height:1.7;margin:0}
+.listbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.listbar .count{flex:1;min-width:0}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;border:0;background:var(--surface);color:var(--fg);padding:4px 14px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button:disabled{opacity:.4;cursor:default}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tr{display:grid;grid-template-columns:28px 52px minmax(0,1.25fr) 66px minmax(0,2fr) 78px 92px 150px 14px;
+  grid-template-areas:"fv cd nm rd bf va cp dt ch";gap:4px 12px;align-items:center;padding:8px 12px 8px 6px;border-top:1px solid var(--line);font-size:13px;line-height:1.45}
+.th{border-top:0;background:var(--bg);font-size:11px;color:var(--muted);letter-spacing:.04em;padding-block:6px}
+div.tr[role=button]{cursor:pointer}
+.th+div.tr[role=button]{border-top:0}
+div.tr[role=button]:hover{background:var(--bg)}
+div.tr[role=button][aria-expanded="true"]{background:var(--accent-soft)}
+.c-fv{grid-area:fv;display:flex;justify-content:center}
+.fav{font:inherit;font-size:18px;line-height:1;border:0;background:none;color:var(--ng);cursor:pointer;padding:4px;margin:-4px;border-radius:6px}
+.fav[aria-pressed="true"]{color:var(--warn)}
+.th .c-fv{font-size:12px;color:var(--muted)}
+.chip.favchip[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:var(--surface)}
+.c-rd{grid-area:rd;font-size:12px;color:var(--accent);white-space:nowrap}
+.th .c-rd{color:var(--muted);font-size:11px}
+.c-cd{grid-area:cd;font-family:var(--f-num);font-size:12px;color:var(--muted)}
+.c-nm{grid-area:nm;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-nm .tag{font-weight:400;margin-left:6px}
+.c-bf{grid-area:bf;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-bf.none{color:var(--muted)}
+.c-va{grid-area:va;text-align:right;font-family:var(--f-num);font-size:12px}
+.c-cp{grid-area:cp;text-align:right;font-family:var(--f-num);font-size:12px}
+.th .c-va,.th .c-cp,.th .c-cd{font-family:var(--f-body);font-size:11px}
+.c-dt{grid-area:dt;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px}
+.c-ch{grid-area:ch;color:var(--muted);font-size:12px;transition:transform .15s}
+div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
+.dot{font-size:10.5px;text-align:center;border-radius:3px;background:var(--bg);color:var(--ng);line-height:18px;font-weight:700}
+.th .dot{background:none;color:var(--muted);font-weight:400}
+.dot.ok{background:var(--ok-soft);color:var(--ok)}
+.dot.ban{background:var(--ban-soft);color:var(--ban)}
+.detail{padding:2px 10px 12px;background:var(--accent-soft)}
+.detail .card{border:0}
+@media (max-width:640px){
+  .th{display:none}
+  .tr{grid-template-columns:24px auto minmax(0,1fr) auto 12px;grid-template-areas:"fv cd nm va ch" ". rd bf bf ch" ". dt dt cp ch";gap:3px 10px}
+  .c-dt{max-width:180px}
+  .c-cp::before{content:"資金 ";font-family:var(--f-body);color:var(--muted);font-size:11px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <div class="top">
+    <h1>優待サーチ <small id="asof">読み込み中…</small></h1>
+    <button class="chip favchip" id="onlyFav" aria-pressed="false">★ お気に入り</button>
+    <a class="btn" id="runLink" href="https://github.com/KenGoodJob/yutai-app/actions/workflows/collect.yml" target="_blank" rel="noopener">収集を実行</a>
+  </div>
+  <div class="search"><input id="q" type="search" placeholder="キーワード（例：QUOカード、寿司、4000）" autocomplete="off"></div>
+  <div class="row" id="quick"><span class="lbl">よく使う</span></div>
+  <div class="row" id="months"><span class="lbl">権利月</span></div>
+  <div class="row"><span class="lbl">一般信用</span>
+    <button class="chip" id="onlyShort" aria-pressed="false">売建可のみ</button>
+    <span id="brokerChips" class="row"></span>
+  </div>
+</div></header>
+
+<main><div class="wrap">
+  <div class="listbar"><div class="count" id="count"></div><div class="seg" role="group" aria-label="詳細の開閉"><button id="openAll">すべて開く</button><button id="closeAll">すべて閉じる</button></div></div>
+  <div id="list" style="display:grid;gap:12px"></div>
+  <p class="note" id="bkUpd"></p>
+  <p class="note">データは96ut.comの一般信用売建リストと銘柄別優待ページから取得しています（みんかぶはリンクのみ）。一般信用の在庫・規制は日々変わるので、発注前に証券会社の画面で確認してください。お気に入りは一時的なもので、ブラウザのタブを閉じると消えます。</p>
+</div></main>
+
+<script>
+/* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
+const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
+const KEYWORDS=["QUOカード","クオカード","食事券","デジタルギフト","自社製品"];
+const FAV_KEY="yutai-favs";
+const $=s=>document.querySelector(s);
+const yen=n=>n==null||n===""?"—":Number(n).toLocaleString("ja-JP")+"円";
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const isShortable=s=>!!s && s!=="売禁";
+
+const meta={};   // month -> {file, asof, count}
+const cache={};  // month -> 月ファイルの中身
+const state={q:"",month:null,onlyShort:false,brokers:new Set(),open:new Set(),onlyFav:false};
+let shown=new Map();
+
+/* お気に入り：タブを閉じると消える一時保存（sessionStorage、使えなければメモリ） */
+let favMem=new Set();
+function favs(){try{const v=sessionStorage.getItem(FAV_KEY);return v?new Set(JSON.parse(v)):favMem;}catch(_){return favMem;}}
+function saveFavs(f){favMem=f;try{sessionStorage.setItem(FAV_KEY,JSON.stringify([...f]));}catch(_){}}
+
+async function getJSON(path){
+  const r=await fetch(path+(path.includes("?")?"&":"?")+"t="+Date.now(),{cache:"no-store"});
+  if(!r.ok) throw new Error(path+"："+r.status);
+  return r.json();
+}
+async function loadMonth(m){
+  if(cache[m]) return cache[m];
+  const d=await getJSON("data/"+meta[m].file);
+  d.items=(d.items||[]).filter(it=>it&&it.c&&it.n).map(it=>({...it,m:Array.isArray(it.m)?it.m:[m]}));
+  return cache[m]=d;
+}
+
+/* ---------- search UI ---------- */
+function renderQuick(){
+  const q=$("#quick");
+  KEYWORDS.forEach(w=>{
+    const b=document.createElement("button");b.className="chip quick";b.textContent=w;
+    b.onclick=()=>{$("#q").value=w;state.q=w;render()};q.append(b);
+  });
+}
+function renderMonths(){
+  const box=$("#months"); box.querySelectorAll(".chip").forEach(c=>c.remove());
+  for(let m=1;m<=12;m++){
+    const b=document.createElement("button");b.className="chip";b.textContent=m+"月";
+    b.disabled=!meta[m];
+    if(b.disabled)b.title="この月はまだ収集していません";
+    b.setAttribute("aria-pressed",String(m===state.month));
+    b.onclick=()=>selectMonth(m);
+    box.append(b);
+  }
+}
+function brokersFor(){return (state.month&&cache[state.month]?.brokers)||BROKERS_DEFAULT;}
+function renderBrokerChips(){
+  const box=$("#brokerChips"); box.innerHTML="";
+  brokersFor().forEach((name,i)=>{
+    const b=document.createElement("button");b.className="chip";b.textContent=name;b.setAttribute("aria-pressed",String(state.brokers.has(i)));
+    b.onclick=()=>{state.brokers.has(i)?state.brokers.delete(i):state.brokers.add(i);b.setAttribute("aria-pressed",String(state.brokers.has(i)));render()};
+    box.append(b);
+  });
+}
+async function selectMonth(m){
+  state.month=m; state.open.clear(); renderMonths();
+  if(!cache[m]){
+    $("#list").innerHTML=`<div class="empty">${m}月のデータを読み込んでいます…</div>`;
+    try{ await loadMonth(m); }
+    catch(e){ $("#list").innerHTML=`<div class="empty">${m}月のデータを読み込めませんでした。<br>時間をおいて開き直してください。</div>`; return; }
+    if(state.month!==m) return;
+  }
+  renderBrokerChips(); render();
+}
+
+function norm(s){return (s||"").normalize("NFKC").toLowerCase().replace(/[,，]/g,"")}
+function match(it){
+  if(state.q){
+    const hay=norm([it.c,it.n,it.t,it.desc,it.long,it.note,(it.tiers||[]).flat().join(" "),it.v].join(" "));
+    if(!norm(state.q).split(/\s+/).every(w=>hay.includes(w)))return false;
+  }
+  if(state.onlyFav && !favs().has(it.c))return false;
+  if(state.onlyShort && !(it.b||[]).some(isShortable))return false;
+  if(state.brokers.size && ![...state.brokers].every(i=>it.b && isShortable(it.b[i])))return false;
+  return true;
+}
+function card(it,brokers){
+  const months=(it.m||[]).slice().sort((a,b)=>a-b).map(m=>m+"月").join("・")+"末";
+  const tiers=(it.tiers||[]).filter(r=>r&&r.length);
+  let ben;
+  if(it.t||it.desc||tiers.length){
+    const sub=[it.times?`年${it.times}回`:"",it.long?`長期：${it.long}`:"",it.note||""].filter(Boolean).join("　");
+    const lab=s=>/(以上|未満)$/.test(s)?s:s+"以上";
+    ben=`<div class="benefit">${it.t?`<b>${esc(it.t)}</b>`:""}${it.desc?`<div>${esc(it.desc)}</div>`:""}${tiers.length?`<table>${tiers.map(r=>`<tr><td>${esc(lab(r[0]))}</td><td>${esc(r[1])}</td></tr>`).join("")}</table>`:""}${sub?`<div class="sub">${esc(sub)}</div>`:""}</div>`;
+  }else ben=`<div class="benefit none">優待内容は未取得（リンク先で確認）</div>`;
+  const bk=it.b?`<div class="brokers">${brokers.map((n,i)=>{
+      const s=it.b[i];const cls=s==="売禁"?"ban":s?"ok":"";
+      return `<div class="bk ${cls}"><span class="bn">${esc(n)}</span><span class="st">${s?esc(s):"×"}</span></div>`}).join("")}</div>`
+    :`<div class="meta">一般信用：データなし</div>`;
+  const c=encodeURIComponent(it.c);
+  return `<article class="card">
+    <div class="head"><span class="code">${esc(it.c)}</span><span class="name">${esc(it.n)}</span>${it.k?`<span class="tag">${esc(it.k)}</span>`:""}<span class="months">${months}</span></div>
+    ${ben}
+    <div class="meta"><span>優待価値（最低単元） <b>${yen(it.v)}</b></span><span>必要資金 <b>${yen(it.cap)}</b></span></div>
+    ${bk}
+    <div class="links"><a href="https://96ut.com/stock/yutai.php?code=${c}" target="_blank" rel="noopener">96ut</a><a href="https://minkabu.jp/stock/${c}/yutai" target="_blank" rel="noopener">みんかぶ</a><a href="https://finance.yahoo.co.jp/quote/${c}" target="_blank" rel="noopener">Yahoo!ファイナンス</a></div>
+  </article>`;
+}
+function bkCls(s){return s==="売禁"?"ban":s?"ok":"";}
+/* 権利日：d = "末" または日付の数値。無いときは月末扱い */
+function rday(it,m){const d=it.d??"末";return `${m}月${d==="末"||d===""?"末日":Number(d)+"日"}`;}
+function listRow(it,brokers){
+  const c=esc(it.c), open=state.open.has(it.c);
+  const bf=[it.t,it.desc,(it.tiers||[]).map(r=>r[1]).join("／")].filter(Boolean).join("　");
+  const dots=it.b?brokers.map((n,i)=>{const s=it.b[i];return `<span class="dot ${bkCls(s)}" title="${esc(n)}：${s?esc(s):"×"}">${esc(n.slice(0,1))}</span>`}).join(""):`<span class="dot" style="grid-column:1/-1">—</span>`;
+  const fv=favs().has(it.c);
+  return `<div class="tr" role="button" tabindex="0" data-code="${c}" aria-expanded="${open}"><span class="c-fv"><button class="fav" data-fav="${c}" aria-pressed="${fv}" aria-label="お気に入り">${fv?"★":"☆"}</button></span><span class="c-cd">${c}</span><span class="c-nm">${esc(it.n)}${it.k?`<span class="tag">${esc(it.k)}</span>`:""}</span><span class="c-rd">${rday(it,state.month)}</span><span class="c-bf${bf?"":" none"}">${bf?esc(bf):"優待内容は未取得"}</span><span class="c-va">${yen(it.v)}</span><span class="c-cp">${yen(it.cap)}</span><span class="c-dt">${dots}</span><span class="c-ch" aria-hidden="true">▶</span></div><div class="detail" ${open?"":"hidden"}>${open?card(it,brokers):""}</div>`;
+}
+function listHead(brokers){
+  return `<div class="tr th" aria-hidden="true"><span class="c-fv">★</span><span class="c-cd">コード</span><span class="c-nm">銘柄名</span><span class="c-rd">権利日</span><span class="c-bf">優待</span><span class="c-va">優待価値</span><span class="c-cp">必要資金</span><span class="c-dt">${brokers.map(n=>`<span class="dot" title="${esc(n)}">${esc(n.slice(0,1))}</span>`).join("")}</span><span class="c-ch"></span></div>`;
+}
+function render(){
+  const d=state.month&&cache[state.month];
+  if(!d){
+    $("#count").textContent=""; $("#bkUpd").textContent="";
+    if(!state.month) $("#list").innerHTML=`<div class="empty">まだ優待データがありません。<br>右上の「収集を実行」から月を選んで実行してください。</div>`;
+    return;
+  }
+  const brokers=brokersFor();
+  const rows=d.items.filter(match);
+  $("#count").textContent=`${state.month}月権利${state.onlyFav?"・★お気に入り":""}　${rows.length}件　（${d.asof||"—"}時点のデータ）`;
+  const bu=d.brokerUpdated;
+  $("#bkUpd").textContent=bu&&bu.some(Boolean)?"一般信用の各社最終更新（96ut）："+brokers.map((n,i)=>bu[i]?`${n} ${bu[i]}`:"").filter(Boolean).join("、"):"";
+  shown=new Map(rows.map(it=>[it.c,it]));
+  syncOpenBtns(rows);
+  if(!rows.length){$("#list").innerHTML=`<div class="empty">${state.onlyFav&&!favs().size?"お気に入りはまだありません。<br>一覧の ☆ を押すと登録できます。":"条件に合う銘柄はありません"}</div>`;return;}
+  $("#list").innerHTML=`<div class="tbl">${listHead(brokers)}${rows.map(it=>listRow(it,brokers)).join("")}</div>`;
+}
+function syncOpenBtns(rows){
+  rows=rows||[...shown.values()];
+  const nOpen=rows.filter(it=>state.open.has(it.c)).length;
+  $("#openAll").disabled=!rows.length||nOpen===rows.length;
+  $("#closeAll").disabled=nOpen===0;
+}
+function toggleFav(btn){
+  const code=btn.dataset.fav, f=favs();
+  f.has(code)?f.delete(code):f.add(code);
+  saveFavs(f);
+  const on=f.has(code); btn.setAttribute("aria-pressed",String(on)); btn.textContent=on?"★":"☆";
+  if(state.onlyFav&&!on) render();
+}
+function toggleRow(b){
+  const code=b.dataset.code, it=shown.get(code), d=b.nextElementSibling; if(!it||!d) return;
+  const open=!state.open.has(code);
+  open?state.open.add(code):state.open.delete(code);
+  b.setAttribute("aria-expanded",String(open));
+  d.innerHTML=open?card(it,brokersFor()):""; d.hidden=!open;
+  syncOpenBtns();
+}
+$("#list").addEventListener("click",e=>{
+  const f=e.target.closest("button.fav"); if(f){ e.stopPropagation(); toggleFav(f); return; }
+  const b=e.target.closest("div.tr[role=button]"); if(b) toggleRow(b);
+});
+$("#list").addEventListener("keydown",e=>{
+  if(e.target.matches?.("div.tr[role=button]")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();toggleRow(e.target);}
+});
+$("#onlyFav").onclick=e=>{state.onlyFav=!state.onlyFav;e.currentTarget.setAttribute("aria-pressed",String(state.onlyFav));render()};
+$("#openAll").onclick=()=>{shown.forEach((_,c)=>state.open.add(c));render();};
+$("#closeAll").onclick=()=>{state.open.clear();render();};
+$("#onlyShort").onclick=e=>{state.onlyShort=!state.onlyShort;e.target.setAttribute("aria-pressed",String(state.onlyShort));render()};
+$("#q").addEventListener("input",e=>{state.q=e.target.value.trim();render()});
+renderQuick(); renderMonths(); renderBrokerChips();
+$("#list").innerHTML=`<div class="empty">データを読み込んでいます…</div>`;
+
+(async()=>{
+  try{
+    const idx=await getJSON("data/index.json");
+    /* 同じ月が複数年あるときは新しいファイルを使う */
+    for(const e of (idx.months||[]).slice().sort((a,b)=>a.file.localeCompare(b.file))) if(e.month) meta[e.month]=e;
+  }catch(e){
+    $("#asof").textContent="読み込みに失敗しました";
+    $("#list").innerHTML=`<div class="empty">データの目次を読み込めませんでした。<br>まだ一度も収集していない場合は「収集を実行」から実行してください。</div>`;
+    return;
+  }
+  const ms=Object.keys(meta).map(Number).sort((a,b)=>a-b);
+  $("#asof").textContent=ms.length?"収集済み："+ms.map(m=>m+"月").join("、"):"データなし";
+  renderMonths();
+  if(!ms.length){ state.month=null; render(); return; }
+  const now=new Date().getMonth()+1;
+  selectMonth(ms.find(m=>m>=now)??ms[0]);
+})();
+</script>
+</body>
+</html>

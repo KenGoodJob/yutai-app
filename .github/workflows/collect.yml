@@ -1,6 +1,9 @@
 name: 優待データ収集
 
 on:
+  # 毎月1日 9:07(日本時間)に当月分を自動取得。cronはUTC指定
+  schedule:
+    - cron: "7 0 1 * *"
   workflow_dispatch:
     inputs:
       month:
@@ -42,10 +45,10 @@ jobs:
       - name: 収集
         run: >
           python scripts/collect.py
-          --month "${{ inputs.month }}"
-          --terms "${{ inputs.terms }}"
-          --limit "${{ inputs.limit }}"
-          --samples "${{ inputs.samples }}"
+          --month "${{ inputs.month || '0' }}"
+          --terms "${{ inputs.terms || '' }}"
+          --limit "${{ inputs.limit || '0' }}"
+          --samples "${{ inputs.samples || '0' }}"
       - name: コミット
         if: always()
         run: |
@@ -55,7 +58,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "変更なし"
           else
-            git commit -m "データ収集: ${{ inputs.month }}月"
+            git commit -m "データ収集: ${{ inputs.month || '当' }}月"
             git pull --rebase
             git push
           fi

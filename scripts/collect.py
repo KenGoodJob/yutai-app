@@ -259,22 +259,40 @@ def parse_broker_updated(soup):
 
 # ---------------------------------------------------------------- 本体
 
+def build_index(data_dir):
+    """data/ にあるファイルから index.json を作り直す(消した月は目次からも消える)。"""
+    months = []
+    for fp in sorted(data_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9].json")):
+        try:
+            d = json.loads(fp.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        its = d.get("items", [])
+        months.append({"file": fp.name, "month": d.get("month"), "asof": d.get("asof", ""),
+                       "count": len(its), "withYutai": sum(1 for x in its if x.get("t") or x.get("tiers"))})
+    (data_dir / "index.json").write_text(json.dumps({"months": months}, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def target_year(month, today):
     return today.year if month >= today.month else today.year + 1
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--month", type=int, required=True)
+    ap.add_argument("--month", type=int, default=0, help="権利月(0または省略=日本時間の当月)")
     ap.add_argument("--terms", default="", help="追加の権利日 term(例: 420)。カンマ区切り")
     ap.add_argument("--limit", type=int, default=0, help="個別ページの取得件数の上限(0=全件、試験用)")
     ap.add_argument("--samples", type=int, default=0, help="保存する元HTMLの件数(個別ページ)")
+    ap.add_argument("--index-only", action="store_true", help="目次の作り直しだけ行う")
     args = ap.parse_args()
-    month = args.month
+    if args.index_only:
+        (ROOT / "data").mkdir(exist_ok=True)
+        build_index(ROOT / "data")
+        return
+    today = dt.datetime.now(JST).date()
+    month = args.month or today.month
     if not 1 <= month <= 12:
         sys.exit("month は1〜12")
-
-    today = dt.datetime.now(JST).date()
     sample_dir = ROOT / "samples"
     if args.samples:
         sample_dir.mkdir(exist_ok=True)
@@ -349,18 +367,8 @@ def main():
     (data_dir / fname).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
     # 3) 目次
-    idx_path = data_dir / "index.json"
-    idx = {"months": []}
-    if idx_path.exists():
-        try:
-            idx = json.loads(idx_path.read_text(encoding="utf-8"))
-        except ValueError:
-            pass
-    idx["months"] = [m for m in idx.get("months", []) if m.get("file") != fname]
+    build_index(data_dir)
     with_t = sum(1 for it in items if it["t"] or it["tiers"])
-    idx["months"].append({"file": fname, "month": month, "asof": data["asof"], "count": len(items), "withYutai": with_t})
-    idx["months"].sort(key=lambda m: m["file"])
-    idx_path.write_text(json.dumps(idx, ensure_ascii=False, indent=1), encoding="utf-8")
 
     summary = [f"## {fname}", f"- 銘柄数: {len(items)}", f"- 優待内容あり: {with_t}", f"- 個別取得失敗: {fail}"] + [f"- {x}" for x in log]
     print("\n".join(summary))

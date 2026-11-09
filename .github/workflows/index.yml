@@ -1,0 +1,31 @@
+name: 目次の作り直し
+
+# data/ の月ファイルを消したり置いたりしたときに data/index.json を作り直す
+on:
+  push:
+    branches: [main]
+    paths: ["data/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests beautifulsoup4
+      - run: python scripts/collect.py --index-only
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/index.json
+          if git diff --cached --quiet; then echo "変更なし"; else git commit -m "目次を更新"; git pull --rebase; git push; fi
