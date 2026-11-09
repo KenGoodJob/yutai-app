@@ -45,6 +45,7 @@ input[type=search]{flex:1;min-width:0;font:inherit;padding:9px 12px;border:1px s
 .upd .ver{color:inherit}
 .upd .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
 .upd .small{font-size:11px;color:var(--muted);flex-basis:100%}
+header .listbar{border-top:1px solid var(--line);padding-top:8px}
 main .wrap{padding-block:14px 40px;display:grid;gap:12px}
 .count{font-size:13px;color:var(--muted)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:10px;min-width:0}
@@ -78,14 +79,18 @@ main .wrap{padding-block:14px 40px;display:grid;gap:12px}
 .seg button{font:inherit;font-size:13px;border:0;background:var(--surface);color:var(--fg);padding:4px 14px;cursor:pointer}
 .seg button+button{border-left:1px solid var(--line)}
 .seg button:disabled{opacity:.4;cursor:default}
-.tbl{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.tr{display:grid;grid-template-columns:28px 52px minmax(0,1.25fr) 66px minmax(0,2fr) 78px 92px 150px 14px;
-  grid-template-areas:"fv cd nm rd bf va cp dt ch";gap:4px 12px;align-items:center;padding:8px 12px 8px 6px;border-top:1px solid var(--line);font-size:13px;line-height:1.45}
-.th{border-top:0;background:var(--bg);font-size:11px;color:var(--muted);letter-spacing:.04em;padding-block:6px}
+/* overflow:clip は角丸を保ったまま見出し行の sticky を効かせる（未対応ブラウザは visible） */
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:visible;overflow:clip}
+.tr{display:grid;grid-template-columns:26px 28px 52px minmax(0,1.25fr) 66px minmax(0,2fr) 78px 92px 150px 14px;
+  grid-template-areas:"no fv cd nm rd bf va cp dt ch";gap:4px 12px;align-items:center;padding:8px 12px 8px 6px;border-top:1px solid var(--line);font-size:13px;line-height:1.45}
+.th{border-top:0;background:var(--bg);font-size:11px;color:var(--muted);letter-spacing:.04em;padding-block:6px;
+  position:sticky;top:var(--hdr,0px);z-index:4;border-bottom:1px solid var(--line);border-radius:10px 10px 0 0}
 div.tr[role=button]{cursor:pointer}
 .th+div.tr[role=button]{border-top:0}
 div.tr[role=button]:hover{background:var(--bg)}
 div.tr[role=button][aria-expanded="true"]{background:var(--accent-soft)}
+.c-no{grid-area:no;text-align:right;font-family:var(--f-num);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.th .c-no{font-family:var(--f-body)}
 .c-fv{grid-area:fv;display:flex;justify-content:center}
 .fav{font:inherit;font-size:18px;line-height:1;border:0;background:none;color:var(--ng);cursor:pointer;padding:4px;margin:-4px;border-radius:6px}
 .fav[aria-pressed="true"]{color:var(--warn)}
@@ -112,7 +117,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
 .detail .card{border:0}
 @media (max-width:640px){
   .th{display:none}
-  .tr{grid-template-columns:24px auto minmax(0,1fr) auto 12px;grid-template-areas:"fv cd nm va ch" ". rd bf bf ch" ". dt dt cp ch";gap:3px 10px}
+  .tr{grid-template-columns:24px auto minmax(0,1fr) auto 12px;grid-template-areas:"fv cd nm va ch" "no rd bf bf ch" ". dt dt cp ch";gap:3px 10px}
   .c-dt{max-width:180px}
   .c-cp::before{content:"資金 ";font-family:var(--f-body);color:var(--muted);font-size:11px}
 }
@@ -137,10 +142,10 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
     <button class="chip" id="onlyShort" aria-pressed="false">売建可のみ</button>
     <span id="brokerChips" class="row"></span>
   </div>
+  <div class="listbar"><div class="count" id="count"></div><div class="seg" role="group" aria-label="詳細の開閉"><button id="openAll">すべて開く</button><button id="closeAll">すべて閉じる</button></div></div>
 </div></header>
 
 <main><div class="wrap">
-  <div class="listbar"><div class="count" id="count"></div><div class="seg" role="group" aria-label="詳細の開閉"><button id="openAll">すべて開く</button><button id="closeAll">すべて閉じる</button></div></div>
   <div id="list" style="display:grid;gap:12px"></div>
   <p class="note" id="bkUpd"></p>
   <p class="note">データは96ut.comの一般信用売建リストと銘柄別優待ページから取得しています（みんかぶはリンクのみ）。一般信用の在庫・規制は日々変わるので、発注前に証券会社の画面で確認してください。お気に入りは一時的なもので、ブラウザのタブを閉じると消えます。</p>
@@ -148,11 +153,11 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
 
 <script>
 /* 版番号：公開時刻（日本時間）の14桁。公開のたびに version.json と同じ値へ更新する */
-const APP_VERSION='20261109233551';
+const APP_VERSION='20261109235427';
 const APP_URL='https://kengoodjob.github.io/yutai-app/';
 /* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
 const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
-const KEYWORDS=["QUOカード","クオカード","食事券","デジタルギフト","自社製品"];
+const KEYWORDS=["クオカード","QUOカード"];
 const FAV_KEY="yutai-favs";
 const $=s=>document.querySelector(s);
 const yen=n=>n==null||n===""?"—":Number(n).toLocaleString("ja-JP")+"円";
@@ -228,7 +233,8 @@ function match(it){
   }
   if(state.onlyFav && !favs().has(it.c))return false;
   if(state.onlyShort && !(it.b||[]).some(isShortable))return false;
-  if(state.brokers.size && ![...state.brokers].every(i=>it.b && isShortable(it.b[i])))return false;
+  /* 証券会社は選んだ社のどれかで売建可（OR） */
+  if(state.brokers.size && ![...state.brokers].some(i=>it.b && isShortable(it.b[i])))return false;
   return true;
 }
 function card(it,brokers){
@@ -256,15 +262,15 @@ function card(it,brokers){
 function bkCls(s){return s==="売禁"?"ban":s?"ok":"";}
 /* 権利日：d = "末" または日付の数値。無いときは月末扱い */
 function rday(it,m){const d=it.d??"末";return `${m}月${d==="末"||d===""?"末日":Number(d)+"日"}`;}
-function listRow(it,brokers){
+function listRow(it,brokers,no){
   const c=esc(it.c), open=state.open.has(it.c);
   const bf=[it.t,it.desc,(it.tiers||[]).map(r=>r[1]).join("／")].filter(Boolean).join("　");
   const dots=it.b?brokers.map((n,i)=>{const s=it.b[i];return `<span class="dot ${bkCls(s)}" title="${esc(n)}：${s?esc(s):"×"}">${esc(n.slice(0,1))}</span>`}).join(""):`<span class="dot" style="grid-column:1/-1">—</span>`;
   const fv=favs().has(it.c);
-  return `<div class="tr" role="button" tabindex="0" data-code="${c}" aria-expanded="${open}"><span class="c-fv"><button class="fav" data-fav="${c}" aria-pressed="${fv}" aria-label="お気に入り">${fv?"★":"☆"}</button></span><span class="c-cd">${c}</span><span class="c-nm">${esc(it.n)}${it.k?`<span class="tag">${esc(it.k)}</span>`:""}</span><span class="c-rd">${rday(it,state.month)}</span><span class="c-bf${bf?"":" none"}">${bf?esc(bf):"優待内容は未取得"}</span><span class="c-va">${yen(it.v)}</span><span class="c-cp">${yen(it.cap)}</span><span class="c-dt">${dots}</span><span class="c-ch" aria-hidden="true">▶</span></div><div class="detail" ${open?"":"hidden"}>${open?card(it,brokers):""}</div>`;
+  return `<div class="tr" role="button" tabindex="0" data-code="${c}" aria-expanded="${open}"><span class="c-no">${no}</span><span class="c-fv"><button class="fav" data-fav="${c}" aria-pressed="${fv}" aria-label="お気に入り">${fv?"★":"☆"}</button></span><span class="c-cd">${c}</span><span class="c-nm">${esc(it.n)}${it.k?`<span class="tag">${esc(it.k)}</span>`:""}</span><span class="c-rd">${rday(it,state.month)}</span><span class="c-bf${bf?"":" none"}">${bf?esc(bf):"優待内容は未取得"}</span><span class="c-va">${yen(it.v)}</span><span class="c-cp">${yen(it.cap)}</span><span class="c-dt">${dots}</span><span class="c-ch" aria-hidden="true">▶</span></div><div class="detail" ${open?"":"hidden"}>${open?card(it,brokers):""}</div>`;
 }
 function listHead(brokers){
-  return `<div class="tr th" aria-hidden="true"><span class="c-fv">★</span><span class="c-cd">コード</span><span class="c-nm">銘柄名</span><span class="c-rd">権利日</span><span class="c-bf">優待</span><span class="c-va">優待価値</span><span class="c-cp">必要資金</span><span class="c-dt">${brokers.map(n=>`<span class="dot" title="${esc(n)}">${esc(n.slice(0,1))}</span>`).join("")}</span><span class="c-ch"></span></div>`;
+  return `<div class="tr th" aria-hidden="true"><span class="c-no">No</span><span class="c-fv">★</span><span class="c-cd">コード</span><span class="c-nm">銘柄名</span><span class="c-rd">権利日</span><span class="c-bf">優待</span><span class="c-va">優待価値</span><span class="c-cp">必要資金</span><span class="c-dt">${brokers.map(n=>`<span class="dot" title="${esc(n)}">${esc(n.slice(0,1))}</span>`).join("")}</span><span class="c-ch"></span></div>`;
 }
 function render(){
   const d=state.month&&cache[state.month];
@@ -281,7 +287,7 @@ function render(){
   shown=new Map(rows.map(it=>[it.c,it]));
   syncOpenBtns(rows);
   if(!rows.length){$("#list").innerHTML=`<div class="empty">${state.onlyFav&&!favs().size?"お気に入りはまだありません。<br>一覧の ☆ を押すと登録できます。":"条件に合う銘柄はありません"}</div>`;return;}
-  $("#list").innerHTML=`<div class="tbl">${listHead(brokers)}${rows.map(it=>listRow(it,brokers)).join("")}</div>`;
+  $("#list").innerHTML=`<div class="tbl">${listHead(brokers)}${rows.map((it,i)=>listRow(it,brokers,i+1)).join("")}</div>`;
 }
 function syncOpenBtns(rows){
   rows=rows||[...shown.values()];
@@ -339,6 +345,11 @@ checkVersion();
 /* ホーム画面のアプリは再読み込みせずに復帰するので、前面に戻るたびに確認する */
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkVersion();});
 window.addEventListener("pageshow",e=>{if(e.persisted){lastCheck=0;checkVersion();}});
+
+/* 見出し行を固定ヘッダーの直下に止めるため、ヘッダーの高さを --hdr に入れる */
+const hdr=document.querySelector("header.bar");
+const setHdr=()=>document.documentElement.style.setProperty("--hdr",hdr.offsetHeight+"px");
+setHdr(); if(window.ResizeObserver) new ResizeObserver(setHdr).observe(hdr); else window.addEventListener("resize",setHdr);
 
 renderQuick(); renderMonths(); renderBrokerChips();
 $("#list").innerHTML=`<div class="empty">データを読み込んでいます…</div>`;
