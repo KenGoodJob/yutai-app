@@ -259,6 +259,24 @@ def parse_broker_updated(soup):
 
 # ---------------------------------------------------------------- 本体
 
+def prune_old(data_dir, today, keep):
+    """権利月が過ぎたファイルと、同じ月の古い年のファイルを消す。消したファイル名を返す。"""
+    removed = []
+    files = sorted(data_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9].json"))
+    newest = {}
+    for fp in files:
+        y, m = int(fp.stem[:4]), int(fp.stem[5:7])
+        newest[m] = max(newest.get(m, 0), y)
+    for fp in files:
+        if fp.name == keep:
+            continue
+        y, m = int(fp.stem[:4]), int(fp.stem[5:7])
+        if (y, m) < (today.year, today.month) or y < newest[m]:
+            fp.unlink()
+            removed.append(fp.name)
+    return removed
+
+
 def build_index(data_dir):
     """data/ にあるファイルから index.json を作り直す(消した月は目次からも消える)。"""
     months = []
@@ -366,7 +384,10 @@ def main():
     fname = f"{year}-{month:02d}.json"
     (data_dir / fname).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    # 3) 目次
+    # 3) 古いデータの削除と目次
+    removed = prune_old(data_dir, today, keep=fname)
+    if removed:
+        log.append("削除: " + ", ".join(removed))
     build_index(data_dir)
     with_t = sum(1 for it in items if it["t"] or it["tiers"])
 
