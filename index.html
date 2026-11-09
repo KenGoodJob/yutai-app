@@ -156,7 +156,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
     <b>取得用のトークン（最初に1回だけ）</b>
     <ol>
       <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHubのトークン作成画面</a>を開く</li>
-      <li>名前は「優待サーチ」など。有効期限は長め（例：1年）</li>
+      <li>名前は「優待サーチ」など。有効期限は Custom で1年以内の日付（1年を超えると作成できない）</li>
       <li>Repository access は「Only select repositories」で <b>yutai-app</b> だけ</li>
       <li>Permissions の <b>Actions</b> を「Read and write」にして作成</li>
       <li>表示されたトークン（github_pat_…）をコピーして下に貼り付け、保存</li>
@@ -184,7 +184,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
 
 <script>
 /* 版番号：公開時刻（日本時間）の14桁。公開のたびに version.json と同じ値へ更新する */
-const APP_VERSION='20261110012914';
+const APP_VERSION='20261110021505';
 const APP_URL='https://kengoodjob.github.io/yutai-app/';
 /* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
 const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
