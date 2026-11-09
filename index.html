@@ -12,6 +12,7 @@
   --bg:#f3f5f4; --surface:#ffffff; --fg:#1d2624; --muted:#64716d; --line:#d9e0dd;
   --accent:#0f6b5c; --accent-soft:#e1efeb; --ok:#1f7a3f; --ok-soft:#e3f2e8;
   --ng:#9aa3a0; --ban:#b3261e; --ban-soft:#fbe7e5; --warn:#8a5a00; --warn-soft:#fbf1dc;
+  --hl:#ffe27a; --hl-fg:#3a2c00;
   --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif;
   --f-num:"IBM Plex Mono",ui-monospace,monospace;
   color-scheme:light;
@@ -19,7 +20,7 @@
 @media (prefers-color-scheme:dark){:root{
   --bg:#141a19; --surface:#1c2422; --fg:#e4ebe8; --muted:#94a29d; --line:#2e3a37;
   --accent:#5cc3ad; --accent-soft:#1e3a34; --ok:#6fd08f; --ok-soft:#1f3527;
-  --ng:#5d6a66; --ban:#ff8a80; --ban-soft:#3a2321; --warn:#e0b25a; --warn-soft:#3a2f1a; color-scheme:dark}}
+  --ng:#5d6a66; --ban:#ff8a80; --ban-soft:#3a2321; --warn:#e0b25a; --warn-soft:#3a2f1a; --hl:#8a6a00; --hl-fg:#fff6d6; color-scheme:dark}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6;padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -40,6 +41,8 @@ input[type=search]{flex:1;min-width:0;font:inherit;padding:9px 12px;border:1px s
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
 .chip:disabled{opacity:.4;cursor:default}
 .quick{font-size:12px;padding:2px 9px}
+.chip.hlchip[aria-pressed="true"]{background:var(--hl);border-color:var(--hl);color:var(--hl-fg)}
+mark{background:var(--hl);color:var(--hl-fg);border-radius:2px;padding:0 1px}
 .side{display:grid;justify-items:end;gap:2px}
 .ver{font-family:var(--f-num);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1}
 .upd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:7px 10px;font-size:13px}
@@ -138,6 +141,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
   <div class="upd" id="upd" role="status" hidden></div>
   <div class="search"><input id="q" type="search" placeholder="キーワード（例：QUOカード、寿司、4000）" autocomplete="off"><button class="btn" id="qClear" type="button" disabled>クリア</button></div>
   <div class="row" id="quick"><span class="lbl">よく使う</span></div>
+  <div class="row" id="hlRow"><span class="lbl">ハイライト</span></div>
   <div class="row" id="months"><span class="lbl">権利月</span></div>
   <div class="row"><span class="lbl">一般信用</span>
     <button class="chip" id="onlyShort" aria-pressed="false">売建可のみ</button>
@@ -154,7 +158,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
 
 <script>
 /* 版番号：公開時刻（日本時間）の14桁。公開のたびに version.json と同じ値へ更新する */
-const APP_VERSION='20261110003655';
+const APP_VERSION='20261110004813';
 const APP_URL='https://kengoodjob.github.io/yutai-app/';
 /* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
 const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
@@ -167,7 +171,7 @@ const isShortable=s=>!!s && s!=="売禁";
 
 const meta={};   // month -> {file, asof, count}
 const cache={};  // month -> 月ファイルの中身
-const state={q:"",month:null,onlyShort:false,brokers:new Set(),open:new Set(),onlyFav:false};
+const state={q:"",month:null,onlyShort:false,brokers:new Set(),open:new Set(),onlyFav:false,hl:new Set()};
 let shown=new Map();
 
 /* お気に入り：タブを閉じると消える一時保存（sessionStorage、使えなければメモリ） */
@@ -194,6 +198,36 @@ function renderQuick(){
     const b=document.createElement("button");b.className="chip quick";b.textContent=w;
     b.onclick=()=>{$("#q").value=w;setQ(w)};q.append(b);
   });
+}
+function renderHlChips(){
+  const box=$("#hlRow");
+  KEYWORDS.forEach(w=>{
+    const b=document.createElement("button");b.className="chip quick hlchip";b.textContent=w;b.setAttribute("aria-pressed","false");
+    b.onclick=()=>{state.hl.has(w)?state.hl.delete(w):state.hl.add(w);b.setAttribute("aria-pressed",String(state.hl.has(w)));render()};
+    box.append(b);
+  });
+}
+/* ハイライト：検索語＋ハイライト用キーワード。英数字は全角半角・大文字小文字を区別しない */
+let hlKey=null, hlRe=null;
+function hlRegex(){
+  const words=[...new Set([...norm(state.q).split(/\s+/),...[...state.hl].map(norm)].filter(Boolean))];
+  const key=words.join("\u0000");
+  if(key===hlKey) return hlRe;
+  const pat=w=>[...w].map(ch=>{
+    const e=ch.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    const c=ch.charCodeAt(0);
+    return c>0x20&&c<0x7f?`(?:${e}|${String.fromCharCode(c+0xFEE0).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`:e;
+  }).join("");
+  hlKey=key;
+  hlRe=words.length?new RegExp(words.sort((a,b)=>b.length-a.length).map(pat).join("|"),"giu"):null;
+  return hlRe;
+}
+/* esc の代わりに使う：エスケープしてから一致部分を <mark> で囲む */
+function hl(s){
+  s=String(s??""); const re=hlRegex(); if(!re) return esc(s);
+  let out="",last=0; re.lastIndex=0;
+  for(const m of s.matchAll(re)){ if(!m[0]) continue; out+=esc(s.slice(last,m.index))+"<mark>"+esc(m[0])+"</mark>"; last=m.index+m[0].length; }
+  return out+esc(s.slice(last));
 }
 function renderMonths(){
   const box=$("#months"); box.querySelectorAll(".chip").forEach(c=>c.remove());
@@ -245,7 +279,7 @@ function card(it,brokers){
   if(it.t||it.desc||tiers.length){
     const sub=[it.times?`年${it.times}回`:"",it.long?`長期：${it.long}`:"",it.note||""].filter(Boolean).join("　");
     const lab=s=>/(以上|未満)$/.test(s)?s:s+"以上";
-    ben=`<div class="benefit">${it.t?`<b>${esc(it.t)}</b>`:""}${it.desc?`<div>${esc(it.desc)}</div>`:""}${tiers.length?`<table>${tiers.map(r=>`<tr><td>${esc(lab(r[0]))}</td><td>${esc(r[1])}</td></tr>`).join("")}</table>`:""}${sub?`<div class="sub">${esc(sub)}</div>`:""}</div>`;
+    ben=`<div class="benefit">${it.t?`<b>${hl(it.t)}</b>`:""}${it.desc?`<div>${hl(it.desc)}</div>`:""}${tiers.length?`<table>${tiers.map(r=>`<tr><td>${esc(lab(r[0]))}</td><td>${hl(r[1])}</td></tr>`).join("")}</table>`:""}${sub?`<div class="sub">${hl(sub)}</div>`:""}</div>`;
   }else ben=`<div class="benefit none">優待内容は未取得（リンク先で確認）</div>`;
   const bk=it.b?`<div class="brokers">${brokers.map((n,i)=>{
       const s=it.b[i];const cls=s==="売禁"?"ban":s?"ok":"";
@@ -253,7 +287,7 @@ function card(it,brokers){
     :`<div class="meta">一般信用：データなし</div>`;
   const c=encodeURIComponent(it.c);
   return `<article class="card">
-    <div class="head"><span class="code">${esc(it.c)}</span><span class="name">${esc(it.n)}</span>${it.k?`<span class="tag">${esc(it.k)}</span>`:""}<span class="months">${months}</span></div>
+    <div class="head"><span class="code">${esc(it.c)}</span><span class="name">${hl(it.n)}</span>${it.k?`<span class="tag">${esc(it.k)}</span>`:""}<span class="months">${months}</span></div>
     ${ben}
     <div class="meta"><span>優待価値（最低単元） <b>${yen(it.v)}</b></span><span>必要資金 <b>${yen(it.cap)}</b></span></div>
     ${bk}
@@ -268,7 +302,7 @@ function listRow(it,brokers,no){
   const bf=[it.t,it.desc,(it.tiers||[]).map(r=>r[1]).join("／")].filter(Boolean).join("　");
   const dots=it.b?brokers.map((n,i)=>{const s=it.b[i];return `<span class="dot ${bkCls(s)}" title="${esc(n)}：${s?esc(s):"×"}">${esc(n.slice(0,1))}</span>`}).join(""):`<span class="dot" style="grid-column:1/-1">—</span>`;
   const fv=favs().has(it.c);
-  return `<div class="tr" role="button" tabindex="0" data-code="${c}" aria-expanded="${open}"><span class="c-no">${no}</span><span class="c-fv"><button class="fav" data-fav="${c}" aria-pressed="${fv}" aria-label="お気に入り">${fv?"★":"☆"}</button></span><span class="c-cd">${c}</span><span class="c-nm">${esc(it.n)}${it.k?`<span class="tag">${esc(it.k)}</span>`:""}</span><span class="c-rd">${rday(it,state.month)}</span><span class="c-bf${bf?"":" none"}">${bf?esc(bf):"優待内容は未取得"}</span><span class="c-va">${yen(it.v)}</span><span class="c-cp">${yen(it.cap)}</span><span class="c-dt">${dots}</span><span class="c-ch" aria-hidden="true">▶</span></div><div class="detail" ${open?"":"hidden"}>${open?card(it,brokers):""}</div>`;
+  return `<div class="tr" role="button" tabindex="0" data-code="${c}" aria-expanded="${open}"><span class="c-no">${no}</span><span class="c-fv"><button class="fav" data-fav="${c}" aria-pressed="${fv}" aria-label="お気に入り">${fv?"★":"☆"}</button></span><span class="c-cd">${c}</span><span class="c-nm">${hl(it.n)}${it.k?`<span class="tag">${esc(it.k)}</span>`:""}</span><span class="c-rd">${rday(it,state.month)}</span><span class="c-bf${bf?"":" none"}">${bf?hl(bf):"優待内容は未取得"}</span><span class="c-va">${yen(it.v)}</span><span class="c-cp">${yen(it.cap)}</span><span class="c-dt">${dots}</span><span class="c-ch" aria-hidden="true">▶</span></div><div class="detail" ${open?"":"hidden"}>${open?card(it,brokers):""}</div>`;
 }
 function listHead(brokers){
   return `<div class="tr th" aria-hidden="true"><span class="c-no">No</span><span class="c-fv">★</span><span class="c-cd">コード</span><span class="c-nm">銘柄名</span><span class="c-rd">権利日</span><span class="c-bf">優待</span><span class="c-va">優待価値</span><span class="c-cp">必要資金</span><span class="c-dt">${brokers.map(n=>`<span class="dot" title="${esc(n)}">${esc(n.slice(0,1))}</span>`).join("")}</span><span class="c-ch"></span></div>`;
@@ -369,7 +403,7 @@ const hdr=document.querySelector("header.bar");
 const setHdr=()=>document.documentElement.style.setProperty("--hdr",hdr.offsetHeight+"px");
 setHdr(); if(window.ResizeObserver) new ResizeObserver(setHdr).observe(hdr); else window.addEventListener("resize",setHdr);
 
-renderQuick(); renderMonths(); renderBrokerChips();
+renderQuick(); renderHlChips(); renderMonths(); renderBrokerChips();
 $("#list").innerHTML=`<div class="empty">データを読み込んでいます…</div>`;
 
 (async()=>{
