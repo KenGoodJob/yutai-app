@@ -31,6 +31,7 @@ h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.02em;display:flex;ali
 h1 small{font-size:12px;color:var(--muted);font-weight:500}
 .btn{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:5px 12px;cursor:pointer;text-decoration:none;white-space:nowrap}
 .search{display:flex;gap:8px}
+.search .btn:disabled{opacity:.4;cursor:default}
 input[type=search]{flex:1;min-width:0;font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -135,7 +136,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
     </div>
   </div>
   <div class="upd" id="upd" role="status" hidden></div>
-  <div class="search"><input id="q" type="search" placeholder="キーワード（例：QUOカード、寿司、4000）" autocomplete="off"></div>
+  <div class="search"><input id="q" type="search" placeholder="キーワード（例：QUOカード、寿司、4000）" autocomplete="off"><button class="btn" id="qClear" type="button" disabled>クリア</button></div>
   <div class="row" id="quick"><span class="lbl">よく使う</span></div>
   <div class="row" id="months"><span class="lbl">権利月</span></div>
   <div class="row"><span class="lbl">一般信用</span>
@@ -153,7 +154,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
 
 <script>
 /* 版番号：公開時刻（日本時間）の14桁。公開のたびに version.json と同じ値へ更新する */
-const APP_VERSION='20261110003153';
+const APP_VERSION='20261110003655';
 const APP_URL='https://kengoodjob.github.io/yutai-app/';
 /* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
 const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
@@ -191,7 +192,7 @@ function renderQuick(){
   const q=$("#quick");
   KEYWORDS.forEach(w=>{
     const b=document.createElement("button");b.className="chip quick";b.textContent=w;
-    b.onclick=()=>{$("#q").value=w;state.q=w;render()};q.append(b);
+    b.onclick=()=>{$("#q").value=w;setQ(w)};q.append(b);
   });
 }
 function renderMonths(){
@@ -336,7 +337,9 @@ $("#favNone").onclick=()=>setFavsShown(false);
 $("#openAll").onclick=()=>{shown.forEach((_,c)=>state.open.add(c));render();};
 $("#closeAll").onclick=()=>{state.open.clear();render();};
 $("#onlyShort").onclick=e=>{state.onlyShort=!state.onlyShort;e.target.setAttribute("aria-pressed",String(state.onlyShort));render()};
-$("#q").addEventListener("input",e=>{state.q=e.target.value.trim();render()});
+function setQ(v){state.q=v.trim();$("#qClear").disabled=!$("#q").value;render();}
+$("#q").addEventListener("input",e=>setQ(e.target.value));
+$("#qClear").onclick=()=>{$("#q").value="";setQ("");};
 /* ---------- 新しい版のお知らせ（ホーム画面起動の反映遅れ対策） ---------- */
 function showUpdate(latest){
   const el=$("#upd");
