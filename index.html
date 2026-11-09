@@ -158,7 +158,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
 
 <script>
 /* 版番号：公開時刻（日本時間）の14桁。公開のたびに version.json と同じ値へ更新する */
-const APP_VERSION='20261110005853';
+const APP_VERSION='20261110011114';
 const APP_URL='https://kengoodjob.github.io/yutai-app/';
 /* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
 const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
@@ -171,7 +171,8 @@ const isShortable=s=>!!s && s!=="売禁";
 
 const meta={};   // month -> {file, asof, count}
 const cache={};  // month -> 月ファイルの中身
-const state={q:"",month:null,onlyShort:false,brokers:new Set(),open:new Set(),onlyFav:false,hl:new Set()};
+const state={q:"",month:null,onlyShort:false,brokers:new Set(),open:new Set(),onlyFav:false,hl:new Set(),keep:new Set()};
+/* keep：お気に入り表示中に☆へ戻した銘柄。誤操作に備え、表示を切り替えるまで一覧に残す */
 let shown=new Map();
 
 /* お気に入り：タブを閉じると消える一時保存（sessionStorage、使えなければメモリ） */
@@ -250,7 +251,7 @@ function renderBrokerChips(){
   });
 }
 async function selectMonth(m){
-  state.month=m; state.open.clear(); renderMonths();
+  state.month=m; state.open.clear(); state.keep.clear(); renderMonths();
   if(!cache[m]){
     $("#list").innerHTML=`<div class="empty">${m}月のデータを読み込んでいます…</div>`;
     try{ await loadMonth(m); }
@@ -266,7 +267,7 @@ function match(it){
     const hay=norm([it.c,it.n,it.t,it.desc,it.long,it.note,(it.tiers||[]).flat().join(" "),it.v].join(" "));
     if(!norm(state.q).split(/\s+/).every(w=>hay.includes(w)))return false;
   }
-  if(state.onlyFav && !favs().has(it.c))return false;
+  if(state.onlyFav && !favs().has(it.c) && !state.keep.has(it.c))return false;
   if(state.onlyShort && !(it.b||[]).some(isShortable))return false;
   /* 証券会社は選んだ社のどれかで売建可（OR） */
   if(state.brokers.size && ![...state.brokers].some(i=>it.b && isShortable(it.b[i])))return false;
@@ -340,7 +341,7 @@ function syncFavBtns(rows){
 }
 function setFavsShown(on){
   const f=favs();
-  shown.forEach((_,c)=>on?f.add(c):f.delete(c));
+  shown.forEach((_,c)=>{ if(on) f.add(c); else { f.delete(c); if(state.onlyFav) state.keep.add(c); } });
   saveFavs(f); render();
 }
 function toggleFav(btn){
@@ -348,7 +349,8 @@ function toggleFav(btn){
   f.has(code)?f.delete(code):f.add(code);
   saveFavs(f);
   const on=f.has(code); btn.setAttribute("aria-pressed",String(on)); btn.textContent=on?"★":"☆";
-  if(state.onlyFav&&!on) render(); else syncFavBtns();
+  if(state.onlyFav&&!on) state.keep.add(code);
+  syncFavBtns();
 }
 function toggleRow(b){
   const code=b.dataset.code, it=shown.get(code), d=b.nextElementSibling; if(!it||!d) return;
@@ -365,7 +367,7 @@ $("#list").addEventListener("click",e=>{
 $("#list").addEventListener("keydown",e=>{
   if(e.target.matches?.("div.tr[role=button]")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();toggleRow(e.target);}
 });
-$("#onlyFav").onclick=e=>{state.onlyFav=!state.onlyFav;e.currentTarget.setAttribute("aria-pressed",String(state.onlyFav));render()};
+$("#onlyFav").onclick=e=>{state.onlyFav=!state.onlyFav;state.keep.clear();e.currentTarget.setAttribute("aria-pressed",String(state.onlyFav));render()};
 $("#favAll").onclick=()=>setFavsShown(true);
 $("#favNone").onclick=()=>setFavsShown(false);
 $("#openAll").onclick=()=>{shown.forEach((_,c)=>state.open.add(c));render();};
