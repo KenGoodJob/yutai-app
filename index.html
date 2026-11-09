@@ -39,6 +39,12 @@ input[type=search]{flex:1;min-width:0;font:inherit;padding:9px 12px;border:1px s
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
 .chip:disabled{opacity:.4;cursor:default}
 .quick{font-size:12px;padding:2px 9px}
+.side{display:grid;justify-items:end;gap:2px}
+.ver{font-family:var(--f-num);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1}
+.upd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:7px 10px;font-size:13px}
+.upd .ver{color:inherit}
+.upd .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.upd .small{font-size:11px;color:var(--muted);flex-basis:100%}
 main .wrap{padding-block:14px 40px;display:grid;gap:12px}
 .count{font-size:13px;color:var(--muted)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:10px;min-width:0}
@@ -118,8 +124,12 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
   <div class="top">
     <h1>優待サーチ <small id="asof">読み込み中…</small></h1>
     <button class="chip favchip" id="onlyFav" aria-pressed="false">★ お気に入り</button>
-    <a class="btn" id="runLink" href="https://github.com/KenGoodJob/yutai-app/actions/workflows/collect.yml" target="_blank" rel="noopener">収集を実行</a>
+    <div class="side">
+      <a class="btn" id="runLink" href="https://github.com/KenGoodJob/yutai-app/actions/workflows/collect.yml" target="_blank" rel="noopener">収集を実行</a>
+      <span class="ver" id="ver"></span>
+    </div>
   </div>
+  <div class="upd" id="upd" role="status" hidden></div>
   <div class="search"><input id="q" type="search" placeholder="キーワード（例：QUOカード、寿司、4000）" autocomplete="off"></div>
   <div class="row" id="quick"><span class="lbl">よく使う</span></div>
   <div class="row" id="months"><span class="lbl">権利月</span></div>
@@ -137,6 +147,9 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
 </div></main>
 
 <script>
+/* 版番号：公開時刻（日本時間）の14桁。公開のたびに version.json と同じ値へ更新する */
+const APP_VERSION='20261109233551';
+const APP_URL='https://kengoodjob.github.io/yutai-app/';
 /* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
 const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
 const KEYWORDS=["QUOカード","クオカード","食事券","デジタルギフト","自社製品"];
@@ -303,6 +316,30 @@ $("#openAll").onclick=()=>{shown.forEach((_,c)=>state.open.add(c));render();};
 $("#closeAll").onclick=()=>{state.open.clear();render();};
 $("#onlyShort").onclick=e=>{state.onlyShort=!state.onlyShort;e.target.setAttribute("aria-pressed",String(state.onlyShort));render()};
 $("#q").addEventListener("input",e=>{state.q=e.target.value.trim();render()});
+/* ---------- 新しい版のお知らせ（ホーム画面起動の反映遅れ対策） ---------- */
+function showUpdate(latest){
+  const el=$("#upd");
+  if(!latest||latest<=APP_VERSION){el.hidden=true;el.innerHTML="";return;}
+  el.innerHTML=`<b>新しい版があります</b><span class="ver">v${esc(latest)}</span>
+    <a class="btn primary" href="${APP_URL}?v=${encodeURIComponent(latest)}" target="_top" rel="noopener">更新する</a>
+    <span class="small">反応しないときは、アプリを上にスワイプして終了し、開き直してください。</span>`;
+  el.hidden=false;
+}
+let lastCheck=0;
+async function checkVersion(){
+  if(Date.now()-lastCheck<30000) return;   // 連続した確認は30秒に1回まで
+  lastCheck=Date.now();
+  try{
+    const v=String((await getJSON("version.json")).version||"");
+    showUpdate(/^\d{14}$/.test(v)?v:null);
+  }catch(_){/* 確認の失敗は無視（本体の動作は止めない） */}
+}
+$("#ver").textContent="v"+APP_VERSION;
+checkVersion();
+/* ホーム画面のアプリは再読み込みせずに復帰するので、前面に戻るたびに確認する */
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkVersion();});
+window.addEventListener("pageshow",e=>{if(e.persisted){lastCheck=0;checkVersion();}});
+
 renderQuick(); renderMonths(); renderBrokerChips();
 $("#list").innerHTML=`<div class="empty">データを読み込んでいます…</div>`;
 
