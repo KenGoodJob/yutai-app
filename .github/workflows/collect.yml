@@ -24,6 +24,11 @@ on:
         description: "調整用に保存する元HTMLの件数(0で保存しない)"
         required: false
         default: "0"
+      listonly:
+        description: "売建リストだけ読んで件数を確認(データは書かない。調査用)"
+        type: boolean
+        required: false
+        default: false
       req:
         description: "表示ページからの依頼番号(手動実行では空欄)"
         required: false
@@ -54,6 +59,7 @@ jobs:
           --terms "${{ inputs.terms || '' }}"
           --limit "${{ inputs.limit || '0' }}"
           --samples "${{ inputs.samples || '0' }}"
+          ${{ inputs.listonly && '--list-only' || '' }}
       # 失敗の原因を名前に持つステップ(表示ページが実行のステップ一覧から読む)
       - name: "原因: 一覧が読めない"
         if: failure() && steps.collect.outputs.reason == 'list'

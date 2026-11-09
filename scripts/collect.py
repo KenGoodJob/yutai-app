@@ -156,6 +156,7 @@ def parse_list(html, month, day):
             continue
         seen.add(it["c"])
         out.append(it)
+    parse_list.raw = len(items)
     return out, soup
 
 
@@ -302,6 +303,7 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="個別ページの取得件数の上限(0=全件、試験用)")
     ap.add_argument("--samples", type=int, default=0, help="保存する元HTMLの件数(個別ページ)")
     ap.add_argument("--index-only", action="store_true", help="目次の作り直しだけ行う")
+    ap.add_argument("--list-only", action="store_true", help="売建リストだけ読んで件数を出す(データは書かない。調査用)")
     args = ap.parse_args()
     if args.index_only:
         (ROOT / "data").mkdir(exist_ok=True)
@@ -337,13 +339,18 @@ def main():
         got, soup = parse_list(html, month, day)
         if not updated:
             updated = parse_broker_updated(soup)
-        log.append(f"一覧 {term}: {len(got)}件")
         have = {it["c"] for it in items}
+        dup = [it["c"] for it in got if it["c"] in have]
+        log.append(f"一覧 {term}: {len(got)}件(表の行 {parse_list.raw}、ページ内の重複 {parse_list.raw - len(got)}、他の権利日と重複 {len(dup)}{': ' + ','.join(dup[:20]) if dup else ''})")
         items += [it for it in got if it["c"] not in have]
         for t in sorted(other_terms(soup, month)):
             if t not in done and t not in terms:
                 terms.append(t)
         polite_sleep()
+
+    if args.list_only:
+        write_summary([f"## 売建リストのみ({month}月、データは書いていません)", f"- 銘柄数: {len(items)}"] + [f"- {x}" for x in log])
+        return
 
     # 2) 個別ページ
     fail = 0
