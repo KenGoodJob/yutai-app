@@ -184,7 +184,7 @@ div.tr[role=button][aria-expanded="true"] .c-ch{transform:rotate(90deg)}
 
 <script>
 /* 版番号：公開時刻（日本時間）の14桁。公開のたびに version.json と同じ値へ更新する */
-const APP_VERSION='20261110021505';
+const APP_VERSION='20261110023048';
 const APP_URL='https://kengoodjob.github.io/yutai-app/';
 /* データは同じリポジトリの data/index.json と data/YYYY-MM.json を直接読む */
 const BROKERS_DEFAULT=["松井","eスマ","SBI","楽天","GMO","日興"];
@@ -470,7 +470,14 @@ async function watchJob(){
     if(j.run&&!j.done){
       const run=await gh(`/actions/runs/${j.run}`);
       if(run.status!=="completed"){band(run.status==="queued"?"順番待ち":"収集中");jobTimer=setTimeout(watchJob,10000);return;}
-      if(run.conclusion!=="success"){endJob(`<span>${j.month}月分の収集が失敗しました（${esc(run.conclusion||"")}）。</span>${link()}`,true);return;}
+      if(run.conclusion!=="success"){
+        /* 原因はワークフローの「原因: …」ステップ名から読む。前回のデータは残っている */
+        let why="";
+        try{ const js=await gh(`/actions/runs/${j.run}/jobs`);
+          const st=(js.jobs||[]).flatMap(x=>x.steps||[]).find(x=>x.conclusion==="failure"&&x.name.startsWith("原因:"));
+          if(st) why=st.name.replace(/^原因:\s*/,""); }catch(_){}
+        const msg=run.conclusion==="cancelled"?"取り消されました":why?`失敗しました（${esc(why)}）`:`失敗しました（${esc(run.conclusion||"")}）`;
+        endJob(`<span>${j.month}月分の収集が${msg}。${run.conclusion==="cancelled"?"":"前回のデータはそのままです。"}${why?"取得元サイトが変わった可能性があります。":""}</span>${link()}`,true);return;}
       j.done=Date.now(); lsSet(JOB_KEY,JSON.stringify(j));
     }
     if(j.done){

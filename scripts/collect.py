@@ -377,6 +377,21 @@ def main():
         it.setdefault("v", None)
         it.setdefault("cap", None)
 
+    # 3) 読み取りの点検。おかしければ前回のデータを残して失敗にする
+    with_t = sum(1 for it in items if it["t"] or it["tiers"])
+    t_ok = sum(1 for it in targets if it["t"] or it["tiers"])
+    cap_ok = sum(1 for it in targets if it["cap"])
+    missing_b = [b for i, b in enumerate(BROKERS) if items and all((it.get("b") or [None] * 6)[i] is None for it in items)]
+    reason, detail = "", ""
+    if not items:
+        reason, detail = "list", "売建リストから銘柄が1件も読めませんでした(サイトの停止、URLや表の作りの変更)"
+    elif targets and (t_ok * 2 < len(targets) or cap_ok * 2 < len(targets)):
+        reason, detail = "stock", f"個別ページがほとんど読めませんでした(優待内容 {t_ok}/{len(targets)}、必要資金 {cap_ok}/{len(targets)})"
+    elif missing_b:
+        reason, detail = "broker", "証券会社の列が読めませんでした: " + "、".join(missing_b)
+    if reason:
+        abort_keep(reason, detail, items, with_t, fail_count=fail, log=log)
+
     year = target_year(month, today)
     data = {"asof": today.isoformat(), "at": now.strftime("%Y-%m-%d %H:%M"), "month": month, "brokers": BROKERS,
             "brokerUpdated": [updated.get(b, "") for b in BROKERS], "items": items}
@@ -385,20 +400,32 @@ def main():
     fname = f"{year}-{month:02d}.json"
     (data_dir / fname).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    # 3) 古いデータの削除と目次
+    # 4) 古いデータの削除と目次
     removed = prune_old(data_dir, today, keep=fname)
     if removed:
         log.append("削除: " + ", ".join(removed))
     build_index(data_dir)
-    with_t = sum(1 for it in items if it["t"] or it["tiers"])
 
-    summary = [f"## {fname}", f"- 銘柄数: {len(items)}", f"- 優待内容あり: {with_t}", f"- 個別取得失敗: {fail}"] + [f"- {x}" for x in log]
-    print("\n".join(summary))
-    step = Path(__import__("os").environ.get("GITHUB_STEP_SUMMARY", "/dev/null"))
-    with open(step, "a", encoding="utf-8") as f:
-        f.write("\n".join(summary) + "\n")
-    if not items:
-        sys.exit("銘柄が1件も読めませんでした(samples/ のHTMLを確認)")
+    write_summary([f"## {fname}", f"- 銘柄数: {len(items)}", f"- 優待内容あり: {with_t}", f"- 個別取得失敗: {fail}"] + [f"- {x}" for x in log])
+
+
+def write_summary(lines):
+    print("\n".join(lines))
+    env = __import__("os").environ
+    with open(Path(env.get("GITHUB_STEP_SUMMARY", "/dev/null")), "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def abort_keep(reason, detail, items, with_t, fail_count, log):
+    """データを書かずに終了する。原因の種類は表示ページが読めるよう step の出力 reason に入れる。"""
+    write_summary(["## 失敗(前回のデータはそのまま)", f"- {detail}", f"- 銘柄数: {len(items)}",
+                   f"- 優待内容あり: {with_t}", f"- 個別取得失敗: {fail_count}"] + [f"- {x}" for x in log]
+                  + ["- 調べるときは samples に元HTMLを保存して再実行(入力 samples に件数)"])
+    out = __import__("os").environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a", encoding="utf-8") as f:
+            f.write(f"reason={reason}\n")
+    sys.exit(detail)
 
 
 if __name__ == "__main__":

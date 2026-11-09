@@ -47,12 +47,23 @@ jobs:
           python-version: "3.12"
       - run: pip install requests beautifulsoup4
       - name: 収集
+        id: collect
         run: >
           python scripts/collect.py
           --month "${{ inputs.month }}"
           --terms "${{ inputs.terms || '' }}"
           --limit "${{ inputs.limit || '0' }}"
           --samples "${{ inputs.samples || '0' }}"
+      # 失敗の原因を名前に持つステップ(表示ページが実行のステップ一覧から読む)
+      - name: "原因: 一覧が読めない"
+        if: failure() && steps.collect.outputs.reason == 'list'
+        run: exit 1
+      - name: "原因: 優待内容がほとんど読めない"
+        if: failure() && steps.collect.outputs.reason == 'stock'
+        run: exit 1
+      - name: "原因: 証券会社の列が読めない"
+        if: failure() && steps.collect.outputs.reason == 'broker'
+        run: exit 1
       - name: コミット
         if: always()
         run: |
