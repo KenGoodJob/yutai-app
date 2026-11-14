@@ -18,12 +18,14 @@ on:
         default: ""
       limit:
         description: "個別ページの取得上限(0=全件、試験用)"
+        type: number
         required: false
-        default: "0"
+        default: 0
       samples:
         description: "調整用に保存する元HTMLの件数(0で保存しない)"
+        type: number
         required: false
-        default: "0"
+        default: 0
       listonly:
         description: "売建リストだけ読んで件数を確認(データは書かない。調査用)"
         type: boolean
@@ -51,15 +53,19 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests beautifulsoup4
+      # 入力値は環境変数で渡す(コマンドに直接埋め込むと、細工した値がコマンドとして実行されるため)
       - name: 収集
         id: collect
-        run: >
-          python scripts/collect.py
-          --month "${{ inputs.month }}"
-          --terms "${{ inputs.terms || '' }}"
-          --limit "${{ inputs.limit || '0' }}"
-          --samples "${{ inputs.samples || '0' }}"
-          ${{ inputs.listonly && '--list-only' || '' }}
+        env:
+          IN_MONTH: ${{ inputs.month }}
+          IN_TERMS: ${{ inputs.terms }}
+          IN_LIMIT: ${{ inputs.limit }}
+          IN_SAMPLES: ${{ inputs.samples }}
+          IN_LISTONLY: ${{ inputs.listonly }}
+        run: |
+          args=(--month "$IN_MONTH" --terms "$IN_TERMS" --limit "${IN_LIMIT:-0}" --samples "${IN_SAMPLES:-0}")
+          if [ "$IN_LISTONLY" = "true" ]; then args+=(--list-only); fi
+          python scripts/collect.py "${args[@]}"
       # 失敗の原因を名前に持つステップ(表示ページが実行のステップ一覧から読む)
       - name: "原因: 一覧が読めない"
         if: failure() && steps.collect.outputs.reason == 'list'
@@ -72,6 +78,8 @@ jobs:
         run: exit 1
       - name: コミット
         if: always()
+        env:
+          IN_MONTH: ${{ inputs.month }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -80,7 +88,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "変更なし"
           else
-            git commit -m "データ収集: ${{ inputs.month }}月"
+            git commit -m "データ収集: ${IN_MONTH}月"
             git pull --rebase
             git push
           fi
