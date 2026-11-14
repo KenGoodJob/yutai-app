@@ -319,7 +319,16 @@ def main():
         sample_dir.mkdir(exist_ok=True)
 
     # 1) 売建リスト(月末+別権利日)
-    terms = [f"{month}end"] + [t.strip() for t in args.terms.split(",") if t.strip()]
+    # 手入力の権利日は「月+2桁の日」(例: 4月20日 → 420)だけ受け付ける。
+    # URLや保存ファイル名に使うため、それ以外の文字(../ など)は捨てる
+    extra = []
+    for t in (t.strip() for t in args.terms.split(",")):
+        m = re.fullmatch(rf"{month}(\d{{2}})", t)
+        if m and 1 <= int(m.group(1)) <= 31:
+            extra.append(t)
+        elif t:
+            print(f"権利日の指定を無視しました(形式が違う): {t!r}")
+    terms = [f"{month}end"] + extra
     done, items, log, updated = set(), [], [], {}
     while terms:
         term = terms.pop(0)
